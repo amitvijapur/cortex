@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cortex — Workflow Routing Layer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0a0a0a;
+    color: #e4e4e7;
+    min-height: 100vh;
+    padding: 60px 40px;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+
+  .header h1 {
+    font-size: 52px;
+    font-weight: 800;
+    letter-spacing: -2px;
+    background: linear-gradient(135deg, #fafafa, #d4d4d8 60%, #71717a);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 12px;
+  }
+
+  .header p {
+    font-size: 15px;
+    color: #52525b;
+    font-weight: 400;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  /* Flow connectors */
+  .flow-connector {
+    display: flex;
+    justify-content: center;
+    height: 44px;
+    position: relative;
+  }
+
+  .flow-connector::after {
+    content: '';
+    width: 2px;
+    height: 100%;
+    background: linear-gradient(to bottom, rgba(255,255,255,0.25), rgba(255,255,255,0.08));
+  }
+
+  .flow-connector .arrow {
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 8px solid rgba(255,255,255,0.25);
+  }
+
+  /* Entry point */
+  .entry-point {
+    display: flex;
+    justify-content: center;
+  }
+
+  .entry-box {
+    background: linear-gradient(135deg, #27272a, #3f3f46);
+    padding: 16px 48px;
+    border-radius: 50px;
+    font-size: 17px;
+    font-weight: 600;
+    color: #fafafa;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 0 40px rgba(255, 255, 255, 0.04);
+  }
+
+  /* Router */
+  .router-section {
+    position: relative;
+  }
+
+  .router-box {
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 28px 32px;
+    max-width: 560px;
+    margin: 0 auto;
+  }
+
+  .router-box h3 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #a1a1aa;
+    margin-bottom: 18px;
+    text-align: center;
+  }
+
+  .router-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .router-step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .step-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: #d4d4d8;
+    flex-shrink: 0;
+  }
+
+  .step-text {
+    font-size: 13px;
+    color: #a1a1aa;
+  }
+
+  .step-text strong { color: #f4f4f5; }
+
+  .step-tags {
+    display: inline-flex;
+    gap: 5px;
+    margin-left: 4px;
+    flex-wrap: wrap;
+  }
+
+  .step-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.05);
+    color: #d4d4d8;
+  }
+
+  .route-code {
+    color: #e4e4e7;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+
+  /* Skip branch */
+  .skip-branch {
+    position: absolute;
+    right: 40px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .skip-line {
+    width: 50px;
+    height: 2px;
+    background: linear-gradient(to right, rgba(255,255,255,0.2), rgba(255,255,255,0.4));
+  }
+
+  .skip-box {
+    padding: 8px 16px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    font-size: 12px;
+    color: #a1a1aa;
+    white-space: nowrap;
+  }
+
+  /* Tier sections */
+  .tier {
+    margin-bottom: 0;
+  }
+
+  .tier-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+    padding: 0 4px;
+  }
+
+  .tier-badge {
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.06);
+    color: #e4e4e7;
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+
+  .tier-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, rgba(255,255,255,0.18), transparent);
+  }
+
+  .tier-hint {
+    font-size: 12px;
+    color: #52525b;
+    flex-shrink: 0;
+    font-style: italic;
+  }
+
+  /* Cards grid */
+  .tier-grid {
+    display: grid;
+    gap: 14px;
+  }
+
+  .tier-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .tier-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+  .tier-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+
+  .system-card {
+    border-radius: 12px;
+    padding: 22px;
+    position: relative;
+    overflow: hidden;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  }
+
+  /* Subtle accent edge — uses --card-color, the system identity color (diff feature) */
+  .system-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    padding: 1px;
+    background: linear-gradient(135deg, var(--card-color, rgba(255,255,255,0.3)), transparent 50%);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0.7;
+  }
+
+  .system-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    border-color: rgba(255,255,255,0.12);
+  }
+
+  /* Card identity — only --card-color survives. Backgrounds are unified mono. */
+  .card-omc      { --card-color: #8b5cf6; }
+  .card-gsd      { --card-color: #f59e0b; }
+  .card-ecc      { --card-color: #10b981; }
+  .card-agents   { --card-color: #06b6d4; }
+  .card-tessl    { --card-color: #f97316; }
+  .card-design   { --card-color: #ec4899; }
+  .card-adv      { --card-color: #ef4444; }
+  .card-devtools { --card-color: #14b8a6; }
+  .card-cloud    { --card-color: #3b82f6; }
+  .card-mcp      { --card-color: #94a3b8; }
+  .card-graphify { --card-color: #a78bfa; }
+  .card-domain   { --card-color: #84cc16; }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  /* System icons keep their color — these ARE the diff features */
+  .system-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .card-omc      .system-icon { background: rgba(139,92,246,0.18);  color: #c4b5fd; }
+  .card-gsd      .system-icon { background: rgba(245,158,11,0.18);  color: #fcd34d; }
+  .card-ecc      .system-icon { background: rgba(16,185,129,0.18);  color: #6ee7b7; }
+  .card-agents   .system-icon { background: rgba(6,182,212,0.18);   color: #67e8f9; }
+  .card-tessl    .system-icon { background: rgba(249,115,22,0.18);  color: #fdba74; }
+  .card-design   .system-icon { background: rgba(236,72,153,0.18);  color: #f9a8d4; }
+  .card-adv      .system-icon { background: rgba(239,68,68,0.18);   color: #fca5a5; }
+  .card-devtools .system-icon { background: rgba(20,184,166,0.18);  color: #5eead4; }
+  .card-cloud    .system-icon { background: rgba(59,130,246,0.18);  color: #93c5fd; }
+  .card-mcp      .system-icon { background: rgba(148,163,184,0.18); color: #cbd5e1; }
+  .card-graphify .system-icon { background: rgba(167,139,250,0.18); color: #c4b5fd; }
+  .card-domain   .system-icon { background: rgba(132,204,22,0.18);  color: #bef264; }
+
+  .card-titles {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .system-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #f4f4f5;
+    line-height: 1.2;
+  }
+
+  .system-subtitle {
+    font-size: 10px;
+    color: #52525b;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .system-desc {
+    font-size: 12px;
+    color: #a1a1aa;
+    line-height: 1.5;
+    margin-bottom: 14px;
+  }
+
+  .system-patterns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .pattern-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 3px 7px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.04);
+    color: #a1a1aa;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  /* Connector between tiers */
+  .tier-connector {
+    display: flex;
+    justify-content: center;
+    height: 40px;
+    position: relative;
+  }
+
+  .tier-connector::after {
+    content: '';
+    width: 2px;
+    height: 100%;
+    background: rgba(255,255,255,0.06);
+  }
+
+  .tier-connector-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #0a0a0a;
+    padding: 2px 12px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #3f3f46;
+  }
+
+  /* Multi-connect lines */
+  .connect-visual {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 32px;
+    position: relative;
+    margin: 4px 0;
+  }
+
+  .connect-visual .h-line {
+    position: absolute;
+    top: 50%;
+    height: 1px;
+    background: rgba(255,255,255,0.06);
+  }
+
+  .connect-visual .v-lines {
+    display: flex;
+    justify-content: space-around;
+    width: 80%;
+    height: 100%;
+  }
+
+  .connect-visual .v-line {
+    width: 1px;
+    height: 100%;
+    background: rgba(255,255,255,0.06);
+  }
+
+  /* Design Pipeline */
+  .pipeline-section {
+    margin-top: 48px;
+    margin-bottom: 16px;
+  }
+
+  .section-title {
+    text-align: center;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-bottom: 22px;
+    font-weight: 600;
+    color: #a1a1aa;
+  }
+
+  .section-title.pink,
+  .section-title.gray { color: #a1a1aa; }
+
+  .pipeline-flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    flex-wrap: wrap;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .pipeline-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 12px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.06);
+    min-width: 96px;
+    text-align: center;
+  }
+
+  .pipeline-step .p-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #a1a1aa;
+    font-weight: 600;
+  }
+
+  .pipeline-step .p-tool {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #d4d4d8;
+  }
+
+  .pipeline-arrow {
+    color: #3f3f46;
+    font-size: 16px;
+    padding: 0 3px;
+    flex-shrink: 0;
+  }
+
+  /* Combo syntax */
+  .combo-section {
+    margin-top: 48px;
+  }
+
+  .combo-examples {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .combo-ex {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+
+  .combo-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #e4e4e7;
+    margin-bottom: 4px;
+  }
+
+  .combo-desc {
+    font-size: 11px;
+    color: #71717a;
+  }
+
+  /* Infra bar */
+  .infra-bar {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+  }
+
+  .infra-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 14px;
+    border-radius: 50px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    font-size: 12px;
+    color: #71717a;
+  }
+
+  /* Per-MCP identity dots — these stay colored, they're the diff features */
+  .infra-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+
+  .dot-context7  { background: #22d3ee; }
+  .dot-exa       { background: #a78bfa; }
+  .dot-firecrawl { background: #f97316; }
+  .dot-supabase  { background: #10b981; }
+  .dot-slack     { background: #e879f9; }
+
+  /* Decision shortcuts */
+  .shortcuts-section {
+    margin-top: 48px;
+  }
+
+  .shortcuts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+    gap: 6px;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  .shortcut-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    border-radius: 7px;
+    background: rgba(255,255,255,0.015);
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .shortcut-task {
+    font-size: 12px;
+    color: #a1a1aa;
+    min-width: 130px;
+    flex-shrink: 0;
+  }
+
+  .shortcut-arrow-sm {
+    color: #3f3f46;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .shortcut-route {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #d4d4d8;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    margin-top: 56px;
+    padding-top: 28px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    color: #3f3f46;
+    font-size: 11px;
+  }
+
+  /* How tiers connect — visual annotation */
+  .tier-relationship {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 0;
+  }
+
+  .rel-arrow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #3f3f46;
+  }
+
+  .rel-arrow .dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #3f3f46;
+  }
+
+  .rel-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #52525b;
+    padding: 0 8px;
+  }
+
+  /* Native + Self-learning section helpers — pure mono */
+  .mono-section-title { color: #d4d4d8 !important; }
+
+  .mono-block-desc {
+    text-align: center;
+    font-size: 12px;
+    color: #71717a;
+    max-width: 680px;
+    margin: 0 auto 20px auto;
+    line-height: 1.5;
+  }
+
+  .mono-block-desc code {
+    color: #e4e4e7;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+
+  .mono-combo-ex {
+    border-color: rgba(255,255,255,0.08) !important;
+    background: rgba(255,255,255,0.025) !important;
+  }
+
+  .phase-pill {
+    padding: 5px 12px;
+    border-radius: 50px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+  }
+
+  .phase-active {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #f4f4f5;
+  }
+
+  .phase-pending {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #a1a1aa;
+  }
+
+  .phase-future {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    color: #52525b;
+  }
+
+  @media (max-width: 900px) {
+    .tier-grid.cols-3, .tier-grid.cols-4 { grid-template-columns: repeat(2, 1fr); }
+    .combo-examples { grid-template-columns: 1fr; }
+    body { padding: 32px 20px; }
+    .header h1 { font-size: 38px; }
+    .skip-branch { display: none; }
+  }
+
+  @media (max-width: 600px) {
+    .tier-grid.cols-3, .tier-grid.cols-4, .tier-grid.cols-2 { grid-template-columns: 1fr; }
+    .shortcuts-grid { grid-template-columns: 1fr; }
+    .pipeline-flow { flex-direction: column; }
+    .pipeline-arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>Cortex</h1>
+    <p>Workflow Routing Layer for Claude Code</p>
+  </div>
+
+  <!-- Entry -->
+  <div class="entry-point">
+    <div class="entry-box">Task Arrives</div>
+  </div>
+
+  <div class="flow-connector"><div class="arrow"></div></div>
+
+  <!-- Router -->
+  <div class="router-section">
+    <div class="router-box">
+      <h3>Routing Protocol</h3>
+      <div class="router-steps">
+        <div class="router-step">
+          <div class="step-num">1</div>
+          <div class="step-text"><strong>Classify</strong>
+            <div class="step-tags">
+              <span class="step-tag">build</span>
+              <span class="step-tag">review</span>
+              <span class="step-tag">plan</span>
+              <span class="step-tag">research</span>
+              <span class="step-tag">debug</span>
+              <span class="step-tag">design</span>
+              <span class="step-tag">quick fix</span>
+            </div>
+          </div>
+        </div>
+        <div class="router-step">
+          <div class="step-num">2</div>
+          <div class="step-text"><strong>Route</strong> &mdash; pick orchestrator</div>
+        </div>
+        <div class="router-step">
+          <div class="step-num">3</div>
+          <div class="step-text"><strong>Specialise</strong> &mdash; attach agents + skills</div>
+        </div>
+        <div class="router-step">
+          <div class="step-num">4</div>
+          <div class="step-text"><strong>Execute</strong> &mdash; <code class="route-code">[Orchestrator] &gt; [Pattern] &gt; [Specialist]</code></div>
+        </div>
+      </div>
+    </div>
+    <div class="skip-branch">
+      <div class="skip-line"></div>
+      <div class="skip-box">Trivial? &rarr; Direct Execution</div>
+    </div>
+  </div>
+
+  <div class="flow-connector"><div class="arrow"></div></div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- TIER 1: ORCHESTRATORS -->
+  <!-- ═══════════════════════════════════════ -->
+  <div class="tier tier-orchestrators">
+    <div class="tier-header">
+      <span class="tier-badge">Orchestrators</span>
+      <div class="tier-line"></div>
+      <span class="tier-hint">Pick one to drive the task</span>
+    </div>
+    <div class="tier-grid cols-3">
+      <!-- OMC -->
+      <div class="system-card card-omc">
+        <div class="card-header">
+          <div class="system-icon">O</div>
+          <div class="card-titles">
+            <div class="system-name">OMC</div>
+            <div class="system-subtitle">oh-my-claudecode</div>
+          </div>
+        </div>
+        <div class="system-desc">Multi-agent orchestration with verify/fix loops and team mode. Default for complex work.</div>
+        <div class="system-patterns">
+          <span class="pattern-tag">ralplan</span>
+          <span class="pattern-tag">autopilot</span>
+          <span class="pattern-tag">ralph</span>
+          <span class="pattern-tag">/team</span>
+          <span class="pattern-tag">ultrawork</span>
+          <span class="pattern-tag">/ccg</span>
+          <span class="pattern-tag">/deep-interview</span>
+          <span class="pattern-tag">/deep-dive</span>
+          <span class="pattern-tag">/verify</span>
+        </div>
+      </div>
+      <!-- GSD -->
+      <div class="system-card card-gsd">
+        <div class="card-header">
+          <div class="system-icon">G</div>
+          <div class="card-titles">
+            <div class="system-name">GSD</div>
+            <div class="system-subtitle">Get Shit Done</div>
+          </div>
+        </div>
+        <div class="system-desc">Phase-based project management with context rot prevention. Full lifecycle.</div>
+        <div class="system-patterns">
+          <span class="pattern-tag">/gsd-new-project</span>
+          <span class="pattern-tag">/gsd-autonomous</span>
+          <span class="pattern-tag">/gsd-do</span>
+          <span class="pattern-tag">/gsd-plan-phase</span>
+          <span class="pattern-tag">/gsd-execute-phase</span>
+          <span class="pattern-tag">/gsd-debug</span>
+          <span class="pattern-tag">/gsd-ship</span>
+        </div>
+      </div>
+      <!-- ECC -->
+      <div class="system-card card-ecc">
+        <div class="card-header">
+          <div class="system-icon">E</div>
+          <div class="card-titles">
+            <div class="system-name">ECC</div>
+            <div class="system-subtitle">claude-plugins-official</div>
+          </div>
+        </div>
+        <div class="system-desc">Code-focused workflows with PR pipelines, review cycles, and LSP integration.</div>
+        <div class="system-patterns">
+          <span class="pattern-tag">feature-dev</span>
+          <span class="pattern-tag">code-review</span>
+          <span class="pattern-tag">pr-review-toolkit</span>
+          <span class="pattern-tag">ralph-loop</span>
+          <span class="pattern-tag">code-simplifier</span>
+          <span class="pattern-tag">security-guidance</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Relationship connector -->
+  <div class="tier-relationship">
+    <div class="rel-arrow"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    <div class="rel-label">orchestrators attach specialists</div>
+    <div class="rel-arrow"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- TIER 2: SPECIALISTS -->
+  <!-- ═══════════════════════════════════════ -->
+  <div class="tier tier-specialists">
+    <div class="tier-header">
+      <span class="tier-badge">Specialists</span>
+      <div class="tier-line"></div>
+      <span class="tier-hint">Plug into orchestrators for domain expertise</span>
+    </div>
+    <div class="tier-grid cols-3">
+      <!-- Agency Agents -->
+      <div class="system-card card-agents">
+        <div class="card-header">
+          <div class="system-icon">180+</div>
+          <div class="card-titles">
+            <div class="system-name">Agency Agents</div>
+            <div class="system-subtitle">~/.claude/agents/</div>
+          </div>
+        </div>
+        <div class="system-desc">Domain specialists paired with any orchestrator via combo syntax.</div>
+        <div class="system-patterns">
+          <span class="pattern-tag">Software Architect</span>
+          <span class="pattern-tag">Backend Architect</span>
+          <span class="pattern-tag">Security Engineer</span>
+          <span class="pattern-tag">Frontend Developer</span>
+          <span class="pattern-tag">UI Designer</span>
+          <span class="pattern-tag">AI Engineer</span>
+          <span class="pattern-tag">Voice AI Integration</span>
+          <span class="pattern-tag">Codebase Onboarding</span>
+          <span class="pattern-tag">Minimal Change</span>
+          <span class="pattern-tag">Chief of Staff</span>
+          <span class="pattern-tag">Agentic Search Optimizer</span>
+          <span class="pattern-tag">+170 more</span>
+        </div>
+      </div>
+      <!-- Tessl -->
+      <div class="system-card card-tessl">
+        <div class="card-header">
+          <div class="system-icon">T</div>
+          <div class="card-titles">
+            <div class="system-name">Tessl Skills</div>
+            <div class="system-subtitle">Framework expertise</div>
+          </div>
+        </div>
+        <div class="system-desc">Framework-specific skills with live docs via Context7.</div>
+        <div class="system-patterns">
+          <span class="pattern-tag">senior-frontend</span>
+          <span class="pattern-tag">nextjs-developer</span>
+          <span class="pattern-tag">stripe-integration</span>
+          <span class="pattern-tag">modern-python</span>
+          <span class="pattern-tag">frontend-design</span>
+          <span class="pattern-tag">3d-web-experience</span>
+        </div>
+      </div>
+      <!-- Design Systems -->
+      <div class="system-card card-design">
+        <div class="card-header">
+          <div class="system-icon">D</div>
+          <div class="card-titles">
+            <div class="system-name">Design Systems</div>
+            <div class="system-subtitle">awesome-design-md + skills</div>
+          </div>
+        </div>
+        <div class="system-desc">58+ real-world design specs with full pipeline from setup to QA.</div>
+        <div class="system-patterns">
+          <span class="pattern-tag">teach-impeccable</span>
+          <span class="pattern-tag">DESIGN.md</span>
+          <span class="pattern-tag">frontend-design</span>
+          <span class="pattern-tag">animate</span>
+          <span class="pattern-tag">polish</span>
+          <span class="pattern-tag">critique</span>
+          <span class="pattern-tag">audit</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Relationship connector -->
+  <div class="tier-relationship">
+    <div class="rel-arrow"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    <div class="rel-label">domain-specific foundation models</div>
+    <div class="rel-arrow"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- TIER 2.5: DOMAIN MODELS -->
+  <!-- ═══════════════════════════════════════ -->
+  <div class="tier tier-domain">
+    <div class="tier-header">
+      <span class="tier-badge">Domain Models</span>
+      <div class="tier-line"></div>
+      <span class="tier-hint">Pre-trained foundation models for specific domains</span>
+    </div>
+    <div class="tier-grid cols-3">
+      <!-- Kronos -->
+      <div class="system-card card-domain">
+        <div class="card-header">
+          <div class="system-icon">K</div>
+          <div class="card-titles">
+            <div class="system-name">Kronos</div>
+            <div class="system-subtitle">financial candlestick forecasting</div>
+          </div>
+        </div>
+        <div class="system-desc">First open-source foundation model for OHLCV K-line prediction. Trained on 45+ exchanges. Tokenizer + autoregressive transformer. Use as baseline or feature, not oracle.</div>
+        <div class="system-patterns">
+          <span class="pattern-tag">kronos predict</span>
+          <span class="pattern-tag">kronos backtest</span>
+          <span class="pattern-tag">kronos finetune</span>
+          <span class="pattern-tag">mini / small / base / large</span>
+        </div>
+      </div>
+      <!-- Placeholder for next domain model -->
+      <div class="system-card card-domain" style="opacity:0.4; border-style:dashed;">
+        <div class="card-header">
+          <div class="system-icon">+</div>
+          <div class="card-titles">
+            <div class="system-name">Add a model</div>
+            <div class="system-subtitle">~/Desktop/tools/&lt;Name&gt;/</div>
+          </div>
+        </div>
+        <div class="system-desc">Drop-in slot for the next domain foundation model — weather, protein, audio, etc. Convention: install dir + bin wrapper + cortex.md entry.</div>
+        <div class="system-patterns">
+          <span class="pattern-tag">future</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Relationship connector -->
+  <div class="tier-relationship">
+    <div class="rel-arrow"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    <div class="rel-label">validated by quality gates</div>
+    <div class="rel-arrow"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- TIER 3: QUALITY GATES -->
+  <!-- ═══════════════════════════════════════ -->
+  <div class="tier tier-quality">
+    <div class="tier-header">
+      <span class="tier-badge">Quality Gates</span>
+      <div class="tier-line"></div>
+      <span class="tier-hint">Harden and verify before shipping</span>
+    </div>
+    <div class="tier-grid cols-2">
+      <!-- Adversarial Spec -->
+      <div class="system-card card-adv">
+        <div class="card-header">
+          <div class="system-icon">A</div>
+          <div class="card-titles">
+            <div class="system-name">Adversarial Spec</div>
+            <div class="system-subtitle">Multi-model debate</div>
+          </div>
+        </div>
+        <div class="system-desc">Harden specs through cross-LLM adversarial review. GPT, Gemini, and Grok debate until consensus.</div>
+        <div class="system-patterns">
+          <span class="pattern-tag">/adversarial-spec</span>
+        </div>
+      </div>
+      <!-- Chrome DevTools -->
+      <div class="system-card card-devtools">
+        <div class="card-header">
+          <div class="system-icon">&#9881;</div>
+          <div class="card-titles">
+            <div class="system-name">Chrome DevTools</div>
+            <div class="system-subtitle">Browser debugging &amp; QA</div>
+          </div>
+        </div>
+        <div class="system-desc">Visual QA, Lighthouse audits, accessibility testing, network debugging, performance analysis.</div>
+        <div class="system-patterns">
+          <span class="pattern-tag">a11y-debugging</span>
+          <span class="pattern-tag">debug-optimize-lcp</span>
+          <span class="pattern-tag">lighthouse</span>
+          <span class="pattern-tag">screenshots</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Relationship connector -->
+  <div class="tier-relationship">
+    <div class="rel-arrow"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    <div class="rel-label">all powered by infrastructure</div>
+    <div class="rel-arrow"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- TIER 4: INFRASTRUCTURE -->
+  <!-- ═══════════════════════════════════════ -->
+  <div class="tier tier-infra">
+    <div class="tier-header">
+      <span class="tier-badge">Infrastructure</span>
+      <div class="tier-line"></div>
+      <span class="tier-hint">Consumed by all layers above</span>
+    </div>
+    <div class="tier-grid cols-3">
+      <!-- Graphify -->
+      <div class="system-card card-graphify">
+        <div class="card-header">
+          <div class="system-icon">&#9901;</div>
+          <div class="card-titles">
+            <div class="system-name">Graphify</div>
+            <div class="system-subtitle">knowledge graph layer</div>
+          </div>
+        </div>
+        <div class="system-desc">Indexes code + docs + papers + media into a queryable knowledge graph. Run before research, onboarding, or cross-module refactors.</div>
+        <div class="system-patterns">
+          <span class="pattern-tag">/graphify .</span>
+          <span class="pattern-tag">query</span>
+          <span class="pattern-tag">path</span>
+          <span class="pattern-tag">explain</span>
+          <span class="pattern-tag">--watch</span>
+        </div>
+      </div>
+      <!-- MCP Core -->
+      <div class="system-card card-mcp">
+        <div class="card-header">
+          <div class="system-icon">M</div>
+          <div class="card-titles">
+            <div class="system-name">Core MCPs</div>
+            <div class="system-subtitle">docs, search, data</div>
+          </div>
+        </div>
+        <div class="system-desc">Live documentation, AI-native web search, page extraction, database, and team comms.</div>
+        <div class="system-patterns">
+          <span class="pattern-tag">Context7</span>
+          <span class="pattern-tag">Exa</span>
+          <span class="pattern-tag">Firecrawl</span>
+          <span class="pattern-tag">Supabase</span>
+          <span class="pattern-tag">Slack</span>
+        </div>
+      </div>
+      <!-- Cloud MCPs -->
+      <div class="system-card card-cloud">
+        <div class="card-header">
+          <div class="system-icon">C</div>
+          <div class="card-titles">
+            <div class="system-name">Cloud MCPs</div>
+            <div class="system-subtitle">claude.ai connected</div>
+          </div>
+        </div>
+        <div class="system-desc">Productivity tools, design platforms, communication, and knowledge bases.</div>
+        <div class="system-patterns">
+          <span class="pattern-tag">Figma</span>
+          <span class="pattern-tag">Notion</span>
+          <span class="pattern-tag">Gmail</span>
+          <span class="pattern-tag">Calendar</span>
+          <span class="pattern-tag">Canva</span>
+          <span class="pattern-tag">Granola</span>
+          <span class="pattern-tag">Telegram</span>
+          <span class="pattern-tag">Scholar</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- DESIGN PIPELINE -->
+  <!-- ═══════════════════════════════════════ -->
+  <div class="pipeline-section">
+    <div class="section-title">Design Pipeline (cross-tier example)</div>
+    <div class="pipeline-flow">
+      <div class="pipeline-step">
+        <div class="p-label">Setup</div>
+        <div class="p-tool">teach-impeccable</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step">
+        <div class="p-label">Spec</div>
+        <div class="p-tool">DESIGN.md</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step">
+        <div class="p-label">Extract</div>
+        <div class="p-tool">Figma MCP</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step">
+        <div class="p-label">Build</div>
+        <div class="p-tool">frontend-design</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step">
+        <div class="p-label">Animate</div>
+        <div class="p-tool">animate</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step">
+        <div class="p-label">Polish</div>
+        <div class="p-tool">polish</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step">
+        <div class="p-label">Review</div>
+        <div class="p-tool">critique / audit</div>
+      </div>
+      <div class="pipeline-arrow">&rarr;</div>
+      <div class="pipeline-step">
+        <div class="p-label">QA</div>
+        <div class="p-tool">DevTools</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- COMBO SYNTAX -->
+  <!-- ═══════════════════════════════════════ -->
+  <div class="combo-section">
+    <div class="section-title">Combo Syntax — How Layers Connect</div>
+    <div class="combo-examples">
+      <div class="combo-ex">
+        <div class="combo-code">Agent + OMC &rarr; ralplan "task"</div>
+        <div class="combo-desc">Orchestrator drives, specialist executes</div>
+      </div>
+      <div class="combo-ex">
+        <div class="combo-code">Agent + ECC &rarr; /feature-dev "task"</div>
+        <div class="combo-desc">Code workflow with domain expert</div>
+      </div>
+      <div class="combo-ex">
+        <div class="combo-code">/gsd-do "description"</div>
+        <div class="combo-desc">GSD auto-routes to right phase command</div>
+      </div>
+      <div class="combo-ex">
+        <div class="combo-code">/adversarial-spec "contract"</div>
+        <div class="combo-desc">Quality gate before implementation</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- DECISION SHORTCUTS -->
+  <!-- ═══════════════════════════════════════ -->
+  <div class="shortcuts-section">
+    <div class="section-title">Decision Shortcuts</div>
+    <div class="shortcuts-grid">
+      <div class="shortcut-row">
+        <div class="shortcut-task">Build backend</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">OMC &gt; ralplan &gt; Backend Architect</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Build frontend</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">OMC &gt; ralplan &gt; Frontend Dev + tessl</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Build UI w/ design</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">DESIGN.md + frontend-design</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Multi-phase project</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">GSD &gt; /gsd-new-project &gt; autonomous</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Code review</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">ECC &gt; code-review</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Security audit</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">OMC &gt; ralplan &gt; Security Engineer</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Harden spec</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">Adversarial Spec &gt; multi-model debate</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Research</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">OMC &gt; deep-research (Exa + Firecrawl)</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Cross-content research</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">Graphify + OMC deep-research</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Onboard doc-heavy repo</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">Graphify + /gsd-map-codebase + Codebase Onboarding</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Small surgical fix</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">OMC &gt; autopilot &gt; Minimal Change Engineer</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">AEO / GEO / AI citations</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">OMC &gt; ralplan &gt; Agentic Search Optimizer</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Voice AI integration</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">OMC &gt; ralplan &gt; Voice AI Integration Engineer</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Cross-functional ops</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">OMC &gt; autopilot &gt; Chief of Staff</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Legal workflow (intake / billing / review)</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">OMC &gt; autopilot &gt; Legal * agent</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Investment research / tax</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">OMC &gt; autopilot &gt; Finance specialist</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Real estate / loan officer</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">OMC &gt; autopilot &gt; Real Estate / Loan Officer</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">HR onboarding / recruitment</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">OMC &gt; autopilot &gt; HR Onboarding + Recruitment</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Verticalised customer service</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">OMC &gt; autopilot &gt; Healthcare / Hospitality / Retail CS</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Translation / localisation</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">OMC &gt; autopilot &gt; Language Translator</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Sales outreach sequences</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">OMC &gt; autopilot &gt; Sales Outreach + Outbound</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Quick bug fix</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">Direct Execution</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Must be perfect</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">OMC &gt; ralph</div>
+      </div>
+      <div class="shortcut-row">
+        <div class="shortcut-task">Financial OHLCV forecast</div>
+        <div class="shortcut-arrow-sm">&rarr;</div>
+        <div class="shortcut-route">Kronos &gt; predict / backtest</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- NATIVE CLAUDE CODE SURFACE -->
+  <!-- ═══════════════════════════════════════ -->
+  <div class="combo-section">
+    <div class="section-title mono-section-title">Native Claude Code Surface</div>
+    <div class="mono-block-desc">
+      Cross-surface session handoff, inbound event routing, cloud scheduling, and custom agent authoring &mdash; shipped with Claude Code, tier-agnostic plumbing.
+    </div>
+    <div class="combo-examples" style="grid-template-columns: repeat(3, 1fr); max-width: 960px;">
+      <div class="combo-ex mono-combo-ex">
+        <div class="combo-code">Channels</div>
+        <div class="combo-desc">Telegram / Discord / iMessage / webhooks → live session</div>
+      </div>
+      <div class="combo-ex mono-combo-ex">
+        <div class="combo-code">claude --teleport</div>
+        <div class="combo-desc">Move a session terminal ↔ desktop ↔ web ↔ iOS</div>
+      </div>
+      <div class="combo-ex mono-combo-ex">
+        <div class="combo-code">Remote Control</div>
+        <div class="combo-desc">Drive a local session from phone or browser</div>
+      </div>
+      <div class="combo-ex mono-combo-ex">
+        <div class="combo-code">/schedule (cloud)</div>
+        <div class="combo-desc">Cron on Anthropic infra — runs when laptop is off</div>
+      </div>
+      <div class="combo-ex mono-combo-ex">
+        <div class="combo-code">/schedule (desktop)</div>
+        <div class="combo-desc">Scheduled tasks with full local filesystem access</div>
+      </div>
+      <div class="combo-ex mono-combo-ex">
+        <div class="combo-code">Agent SDK</div>
+        <div class="combo-desc">Custom agents when a skill isn't enough (L4)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- SELF-LEARNING LOOP -->
+  <!-- ═══════════════════════════════════════ -->
+  <div class="combo-section">
+    <div class="section-title mono-section-title">Self-Learning Loop</div>
+    <div class="mono-block-desc">
+      Every routing decision writes a line to <code>~/.claude/cortex-log.jsonl</code> with its reasoning trail.
+      Patterns surface automatically once the log has enough signal.
+      No retros, no ceremony &mdash; data-triggered learning.
+    </div>
+    <div class="combo-examples" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="combo-ex mono-combo-ex">
+        <div class="combo-code">/cortex-log</div>
+        <div class="combo-desc">Show last 20 routes with full reasoning</div>
+      </div>
+      <div class="combo-ex mono-combo-ex">
+        <div class="combo-code">/cortex-learn</div>
+        <div class="combo-desc">Detect repeating patterns, propose shortcuts</div>
+      </div>
+      <div class="combo-ex mono-combo-ex">
+        <div class="combo-code">/cortex-reroute "new route"</div>
+        <div class="combo-desc">Mark last route as corrected (Phase 4 signal)</div>
+      </div>
+    </div>
+    <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin-top:20px;">
+      <span class="phase-pill phase-active">Phase 1 · Visibility · ACTIVE</span>
+      <span class="phase-pill phase-pending">Phase 2 · Pattern surfacing · ~20 routes</span>
+      <span class="phase-pill phase-future">Phase 3 · Similarity bias · ~200 routes</span>
+      <span class="phase-pill phase-active">Phase 4 · Correction capture · ACTIVE</span>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    Cortex &mdash; Meta-router for Claude Code &middot; Loaded globally across all projects
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,507 @@
+#!/usr/bin/env python3
+"""cortex — routing decision log and self-learning loop for Cortex.
+
+Subcommands:
+  log       append a routing decision (named-flag form)
+  log-line  append a routing decision from a natural routing line
+  show      display recent routes with reasoning (filterable by --project)
+  learn     detect patterns in the log; writes Obsidian proposals
+  reroute   mark the last entry as corrected
+  doctor    audit cortex setup for drift between docs, skills, and log
+"""
+import argparse
+import hashlib
+import json
+import os
+import re
+import sys
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+
+CLAUDE_DIR = Path(os.environ.get("CLAUDE_DIR", Path.home() / ".claude"))
+LOG_PATH = CLAUDE_DIR / "cortex-log.jsonl"
+CORTEX_MD = CLAUDE_DIR / "cortex.md"
+SKILLS_DIR = CLAUDE_DIR / "skills"
+BIN_PATH = CLAUDE_DIR / "bin" / "cortex"
+DOCTOR_LAST_RUN = CLAUDE_DIR / "cortex-doctor-last-run"
+
+# Optional Obsidian surface — only checked by doctor; absent is a soft-warn, not fail
+OBSIDIAN_ROOT_ENV = os.environ.get("CORTEX_OBSIDIAN_ROOT")
+OBSIDIAN_ROOT = Path(OBSIDIAN_ROOT_ENV) if OBSIDIAN_ROOT_ENV else None
+PROPOSALS_DIR = (OBSIDIAN_ROOT / "proposals") if OBSIDIAN_ROOT else (CLAUDE_DIR / "cortex-proposals")
+
+PATTERN_THRESHOLD = 3
+WEEKLY_GATE_DAYS = 7
+EXPECTED_SKILLS = ["cortex-log", "cortex-learn", "cortex-reroute"]
+
+
+def now_iso():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def session_id():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+
+
+def task_hash(task):
+    normalized = " ".join(task.lower().split())
+    return hashlib.sha256(normalized.encode()).hexdigest()[:12]
+
+
+def project_name():
+    try:
+        return Path(os.getcwd()).name
+    except Exception:
+        return "unknown"
+
+
+def read_log():
+    if not LOG_PATH.exists():
+        return []
+    entries = []
+    with LOG_PATH.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return entries
+
+
+def append_entry(entry):
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with LOG_PATH.open("a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+
+def make_entry(task, classification, system, pattern, agent, tier,
+               tier_reason, system_reason, project, redirect_from):
+    return {
+        "ts": now_iso(),
+        "session_id": session_id(),
+        "project": project or project_name(),
+        "task": task,
+        "task_hash": task_hash(task),
+        "class": classification,
+        "system": system,
+        "pattern": pattern,
+        "agent": agent,
+        "tier": tier,
+        "tier_reason": tier_reason,
+        "system_reason": system_reason,
+        "outcome": None,
+        "redirect_from": redirect_from,
+        "user_correction": None,
+    }
+
+
+def cmd_log(args):
+    entry = make_entry(
+        task=args.task,
+        classification=args.classification,
+        system=args.system,
+        pattern=args.pattern,
+        agent=args.agent,
+        tier=args.tier,
+        tier_reason=args.tier_reason,
+        system_reason=args.system_reason,
+        project=args.project,
+        redirect_from=args.redirect_from,
+    )
+    append_entry(entry)
+    print(f"logged: {args.system} > {args.pattern} @ {args.tier}", file=sys.stderr)
+
+
+# Natural-format parser for routing lines like:
+#   "OMC > ralplan > Backend Architect @ L3"
+#   "Direct > batched-edits @ L2  [system=local-tooling]"
+#   "OMC > /team > [A ∥ B] → C @ L3"
+ROUTE_RE = re.compile(
+    r"^\s*(?P<system>[^>@]+?)\s*>\s*(?P<pattern>[^>@]+?)"
+    r"(?:\s*>\s*(?P<agent>[^@]+?))?"
+    r"\s*@\s*(?P<tier>L[1-4])"
+    r"(?:\s*\[(?P<tags>[^\]]+)\])?\s*$"
+)
+
+
+def parse_route(s):
+    m = ROUTE_RE.match(s)
+    if not m:
+        raise ValueError(
+            f"unparseable route: {s!r}\n"
+            f"expected format: 'System > Pattern [> Agent] @ L<n>'  (optional [tags])"
+        )
+    d = m.groupdict()
+    return {
+        "system": d["system"].strip(),
+        "pattern": d["pattern"].strip(),
+        "agent": d["agent"].strip() if d["agent"] else None,
+        "tier": d["tier"].strip(),
+        "tags": d["tags"],
+    }
+
+
+def cmd_log_line(args):
+    try:
+        parsed = parse_route(args.route)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(2)
+    entry = make_entry(
+        task=args.task,
+        classification=args.classification,
+        system=parsed["system"],
+        pattern=parsed["pattern"],
+        agent=parsed["agent"],
+        tier=parsed["tier"],
+        tier_reason=args.tier_reason,
+        system_reason=args.system_reason,
+        project=args.project,
+        redirect_from=args.redirect_from,
+    )
+    append_entry(entry)
+    print(f"logged: {parsed['system']} > {parsed['pattern']} @ {parsed['tier']}", file=sys.stderr)
+
+
+def format_entry(e):
+    ts = e.get("ts", "?")[:16].replace("T", " ")
+    proj = e.get("project", "?")
+    cls = e.get("class", "?")
+    route = f"{e.get('system', '?')} > {e.get('pattern', '?')}"
+    if e.get("agent"):
+        route += f" > {e['agent']}"
+    route += f" @ {e.get('tier', '?')}"
+    why_parts = []
+    if e.get("tier_reason"):
+        why_parts.append(f"tier: {e['tier_reason']}")
+    if e.get("system_reason"):
+        why_parts.append(f"system: {e['system_reason']}")
+    why = ", ".join(why_parts) if why_parts else "(obvious route)"
+    task = e.get("task", "?")
+    if len(task) > 80:
+        task = task[:77] + "..."
+    flags = []
+    if e.get("redirect_from"):
+        flags.append(f"(redirect from: {e['redirect_from']})")
+    if e.get("outcome") == "corrected":
+        flags.append("[CORRECTED]")
+    flag_str = "  " + " ".join(flags) if flags else ""
+    return f"{ts} [{proj}] {cls}{flag_str}\n  task:  {task}\n  route: {route}\n  why:   {why}"
+
+
+def cmd_show(args):
+    entries = read_log()
+    total_all = len(entries)
+    if args.project:
+        entries = [e for e in entries if e.get("project") == args.project]
+    if not entries:
+        if args.project:
+            print(f"no routes logged for project {args.project!r}")
+        else:
+            print("cortex log is empty — no routes logged yet")
+        return
+    total = len(entries)
+    entries = entries[-args.last:]
+    for e in entries:
+        print(format_entry(e))
+        print()
+    scope = f"project={args.project} ({total} of {total_all} total)" if args.project else f"{total_all} total"
+    print(f"[showing last {len(entries)} — {scope}]")
+
+
+def write_proposal(cls, sys_, pat, count, dominant_tier, tier_count, projects, sample_tasks):
+    PROPOSALS_DIR.mkdir(parents=True, exist_ok=True)
+    today = datetime.now().strftime("%Y-%m-%d")
+    safe_pat = re.sub(r"[^a-z0-9]+", "-", pat.lower()).strip("-") or "pattern"
+    fname = f"{today}--{cls}--{sys_}--{safe_pat}.md"
+    path = PROPOSALS_DIR / fname
+    if path.exists():
+        return path, False
+    proj_str = ", ".join(f"{p}({c})" for p, c in projects.most_common())
+    sample_str = "\n".join(f"- {t}" for t in sample_tasks)
+    content = f"""---
+tags: [cortex, proposal]
+status: pending
+class: {cls}
+system: {sys_}
+pattern: {pat}
+tier: {dominant_tier}
+count: {count}
+detected: {today}
+---
+
+# Proposal — {cls} → {sys_} > {pat} @ {dominant_tier}
+
+`/cortex-learn` detected this routing pattern repeating **{count} times** in the log.
+Dominant tier: **{dominant_tier}** ({tier_count}/{count}).
+
+## Candidate shortcut for cortex.md → Decision Shortcuts
+
+| Task Type | Default Route | Tier |
+|-----------|---------------|------|
+| {cls.capitalize()} task | {sys_} > {pat} | {dominant_tier} |
+
+## Projects where this fired
+
+{proj_str}
+
+## Recent examples
+
+{sample_str}
+
+## Decision
+
+- [ ] Approved — added to cortex.md → Decision Shortcuts
+- [ ] Modified — see notes below
+- [ ] Rejected — see notes below
+
+## Notes
+
+(add reasoning here)
+"""
+    path.write_text(content)
+    return path, True
+
+
+def cmd_learn(args):
+    entries = read_log()
+    active = [e for e in entries if e.get("outcome") != "corrected"]
+
+    groups = defaultdict(list)
+    for e in active:
+        key = (e.get("class"), e.get("system"), e.get("pattern"))
+        if None in key:
+            continue
+        groups[key].append(e)
+
+    candidates = [(key, grp) for key, grp in groups.items() if len(grp) >= args.threshold]
+    candidates.sort(key=lambda x: -len(x[1]))
+
+    if args.check:
+        if candidates:
+            (cls, sys_, pat), grp = candidates[0]
+            print(f"[cortex-learn] {len(grp)} {cls} tasks routed to {sys_} > {pat} — run /cortex-learn to review")
+        return
+
+    total = len(entries)
+    if not candidates:
+        print(f"no patterns yet (threshold: ≥{args.threshold}, total routes logged: {total})")
+        if total > 0:
+            need = args.threshold - max((len(g) for g in groups.values()), default=0)
+            if need > 0:
+                print(f"need {need} more of the same (class, system, pattern) combo to surface a pattern")
+        print(f"\nlearning activates automatically when a routing pattern repeats {args.threshold}+ times.")
+        return
+
+    print(f"found {len(candidates)} pattern(s) above threshold {args.threshold}:\n")
+    written = []
+    for (cls, sys_, pat), grp in candidates:
+        count = len(grp)
+        tiers = Counter(e.get("tier") for e in grp)
+        dominant_tier, tier_count = tiers.most_common(1)[0]
+        projects = Counter(e.get("project") for e in grp)
+        sample_tasks = [e.get("task", "?")[:70] for e in grp[-3:]]
+        print(f"• {cls} → {sys_} > {pat}   ×{count}   (tier: {dominant_tier} in {tier_count}/{count})")
+        print(f"  projects: {', '.join(f'{p}({c})' for p, c in projects.most_common())}")
+        print(f"  candidate shortcut for cortex.md:")
+        print(f"    | {cls.capitalize()} task | {sys_} > {pat} | {dominant_tier} |")
+        print(f"  recent examples:")
+        for t in sample_tasks:
+            print(f"    - {t}")
+        if not args.no_proposals:
+            try:
+                path, created = write_proposal(cls, sys_, pat, count, dominant_tier, tier_count, projects, sample_tasks)
+                if created:
+                    written.append(path)
+                    print(f"  proposal written: {path.name}")
+                else:
+                    print(f"  proposal exists:  {path.name}")
+            except OSError as e:
+                print(f"  could not write proposal ({e}) — proposal folder may be inaccessible")
+        print()
+    print("approve a proposal by editing it (status: approved) and adding the shortcut to cortex.md → Decision Shortcuts.")
+    if written:
+        print(f"\n{len(written)} new proposal(s) written to {PROPOSALS_DIR}")
+
+
+def cmd_reroute(args):
+    entries = read_log()
+    if not entries:
+        print("no entries to reroute")
+        return
+    last = entries[-1]
+    prev_route = f"{last.get('system', '?')} > {last.get('pattern', '?')} @ {last.get('tier', '?')}"
+    last["outcome"] = "corrected"
+    last["user_correction"] = args.to
+    LOG_PATH.write_text("".join(json.dumps(e) + "\n" for e in entries))
+    print(f"marked last route as corrected: {prev_route} → {args.to}")
+    print("next /cortex log call should pass --redirect-from to link the corrected entry to the new route")
+
+
+def cmd_doctor(args):
+    # Gate: in --weekly mode, skip silently if we ran within the gate window
+    if args.weekly and DOCTOR_LAST_RUN.exists():
+        try:
+            last = datetime.fromisoformat(DOCTOR_LAST_RUN.read_text().strip().rstrip("Z")).replace(tzinfo=timezone.utc)
+            if (datetime.now(timezone.utc) - last).days < WEEKLY_GATE_DAYS:
+                return 0
+        except (ValueError, OSError):
+            pass
+
+    issues = {"pass": [], "warn": [], "fail": []}
+
+    # Check 1 — skills wired
+    for skill in EXPECTED_SKILLS:
+        skill_path = SKILLS_DIR / skill / "SKILL.md"
+        if skill_path.exists():
+            issues["pass"].append(f"skill wired: {skill}")
+        else:
+            issues["fail"].append(
+                f"skill missing: {skill} — cortex.md documents /{skill} but {skill_path} doesn't exist"
+            )
+
+    # Check 2 — bin script present and executable
+    if BIN_PATH.exists() and os.access(BIN_PATH, os.X_OK):
+        issues["pass"].append("cortex CLI present and executable")
+    elif BIN_PATH.exists():
+        issues["warn"].append(f"cortex CLI exists but not executable: chmod +x {BIN_PATH}")
+    else:
+        issues["fail"].append(f"cortex CLI missing: {BIN_PATH}")
+
+    # Check 3 — cortex.md present
+    if CORTEX_MD.exists():
+        issues["pass"].append(f"cortex.md present: {CORTEX_MD}")
+    else:
+        issues["warn"].append(f"cortex.md missing — copy templates/cortex.md to {CORTEX_MD}")
+
+    # Check 4 — proposals folder (informational only)
+    if PROPOSALS_DIR.exists():
+        issues["pass"].append(f"proposals folder exists: {PROPOSALS_DIR}")
+    else:
+        issues["pass"].append("proposals folder will be created on first /cortex-learn run")
+
+    # Check 5 — log entries hygiene
+    entries = read_log()
+    total = len(entries)
+    bad = [e for e in entries if not e.get("class") or not e.get("system") or not e.get("pattern") or not e.get("tier")]
+    if bad:
+        issues["warn"].append(f"{len(bad)} log entry/entries missing required fields")
+    elif entries:
+        issues["pass"].append("all log entries have required fields")
+
+    # Check 6 — phase progression
+    if total < 20:
+        issues["pass"].append(f"Phase 1 (visibility) — {total} routes logged")
+    elif total < 200:
+        issues["pass"].append(f"Phase 2 (pattern surfacing active) — {total} routes logged")
+    else:
+        issues["pass"].append(f"Phase 3 (similarity bias eligible) — {total} routes logged")
+
+    # Render
+    n_fail = len(issues["fail"])
+    n_warn = len(issues["warn"])
+    n_pass = len(issues["pass"])
+
+    if args.weekly:
+        if n_fail:
+            print(f"[cortex] !! {n_fail} FAIL, {n_warn} warn — run `python3 ~/.claude/bin/cortex doctor` for details")
+        elif n_warn:
+            print(f"[cortex] {n_warn} warn, 0 fail — run `python3 ~/.claude/bin/cortex doctor` for details")
+        else:
+            phase = "Phase 1" if total < 20 else ("Phase 2" if total < 200 else "Phase 3")
+            print(f"[cortex] all green ({total} routes, {phase})")
+        try:
+            DOCTOR_LAST_RUN.write_text(now_iso())
+        except OSError:
+            pass
+        return 1 if n_fail else 0
+
+    print(f"cortex doctor — {n_pass} pass, {n_warn} warn, {n_fail} fail\n")
+    if issues["fail"]:
+        print("FAIL")
+        for m in issues["fail"]:
+            print(f"  ✗ {m}")
+        print()
+    if issues["warn"]:
+        print("WARN")
+        for m in issues["warn"]:
+            print(f"  ! {m}")
+        print()
+    if args.verbose and issues["pass"]:
+        print("PASS")
+        for m in issues["pass"]:
+            print(f"  ✓ {m}")
+        print()
+    if not issues["fail"] and not issues["warn"]:
+        print("all green")
+    return 1 if n_fail else 0
+
+
+def build_parser():
+    p = argparse.ArgumentParser(prog="cortex", description="Cortex routing log & self-learning loop")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    lg = sub.add_parser("log", help="append a routing decision (named-flag form)")
+    lg.add_argument("--task", required=True)
+    lg.add_argument("--class", dest="classification", required=True,
+                    choices=["build", "review", "plan", "research", "debug", "design", "quickfix"])
+    lg.add_argument("--system", required=True)
+    lg.add_argument("--pattern", required=True)
+    lg.add_argument("--agent", default=None)
+    lg.add_argument("--tier", required=True, choices=["L1", "L2", "L3", "L4"])
+    lg.add_argument("--tier-reason", default=None)
+    lg.add_argument("--system-reason", default=None)
+    lg.add_argument("--project", default=None)
+    lg.add_argument("--redirect-from", default=None)
+    lg.add_argument("--shown-inline", action="store_true", help=argparse.SUPPRESS)
+    lg.set_defaults(func=cmd_log)
+
+    ll = sub.add_parser("log-line", help="append a routing decision from a natural routing line")
+    ll.add_argument("route", help="natural format: 'System > Pattern [> Agent] @ L<n>'")
+    ll.add_argument("task", help="one-line task description")
+    ll.add_argument("--class", dest="classification", required=True,
+                    choices=["build", "review", "plan", "research", "debug", "design", "quickfix"])
+    ll.add_argument("--tier-reason", default=None)
+    ll.add_argument("--system-reason", default=None)
+    ll.add_argument("--project", default=None)
+    ll.add_argument("--redirect-from", default=None)
+    ll.set_defaults(func=cmd_log_line)
+
+    sh = sub.add_parser("show", help="display recent routes")
+    sh.add_argument("--last", type=int, default=20)
+    sh.add_argument("--project", default=None, help="filter by project name")
+    sh.set_defaults(func=cmd_show)
+
+    ln = sub.add_parser("learn", help="detect patterns in the log")
+    ln.add_argument("--threshold", type=int, default=PATTERN_THRESHOLD)
+    ln.add_argument("--check", action="store_true", help="terse one-line output for session start")
+    ln.add_argument("--no-proposals", action="store_true",
+                    help="skip writing proposal markdown files")
+    ln.set_defaults(func=cmd_learn)
+
+    rr = sub.add_parser("reroute", help="mark last entry as corrected")
+    rr.add_argument("--to", required=True, help="the corrected route")
+    rr.set_defaults(func=cmd_reroute)
+
+    dr = sub.add_parser("doctor", help="audit cortex setup for drift between docs, skills, and log")
+    dr.add_argument("-v", "--verbose", action="store_true", help="show passing checks too")
+    dr.add_argument("--weekly", action="store_true",
+                    help=f"compact mode for SessionStart hook; gates to run at most once per {WEEKLY_GATE_DAYS} days")
+    dr.set_defaults(func=cmd_doctor)
+
+    return p
+
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+    rc = args.func(args)
+    sys.exit(rc or 0)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,14 @@
+# Personal state — never commit
+cortex-log.jsonl
+cortex-doctor-last-run
+proposals/
+retros/
+
+# Standard
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+*.swp
+.idea/
+.vscode/

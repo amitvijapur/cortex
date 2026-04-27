@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Council vs Cortex</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0a0a0a;
+    color: #e4e4e7;
+    min-height: 100vh;
+    padding: 60px 40px;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  .title-row {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+
+  .title-row h1 {
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    background: linear-gradient(135deg, #fafafa, #d4d4d8 60%, #71717a);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 10px;
+  }
+
+  .title-row p {
+    font-size: 13px;
+    color: #52525b;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  .panels {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 24px;
+    align-items: stretch;
+  }
+
+  .panel {
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px;
+    padding: 36px 30px;
+    position: relative;
+  }
+
+  .panel-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: #71717a;
+    margin-bottom: 8px;
+  }
+
+  .panel-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #fafafa;
+    margin-bottom: 6px;
+  }
+
+  .panel-subtitle {
+    font-size: 12px;
+    color: #71717a;
+    margin-bottom: 28px;
+    font-style: italic;
+  }
+
+  /* LEFT — LLM Council */
+  .council-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 24px 0;
+  }
+
+  .council-models {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    width: 100%;
+    max-width: 280px;
+  }
+
+  .model-bubble {
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    text-align: center;
+  }
+
+  .model-bubble .m-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #d4d4d8;
+    font-weight: 600;
+  }
+
+  .model-bubble .m-vendor {
+    font-size: 9px;
+    color: #52525b;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 3px;
+  }
+
+  /* Each council model gets a tiny color dot — these are diff features */
+  .m-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .dot-claude { background: #d97757; }
+  .dot-gpt    { background: #19c37d; }
+  .dot-gemini { background: #4285f4; }
+  .dot-grok   { background: #1da1f2; }
+
+  .arrow-down {
+    width: 2px;
+    height: 28px;
+    background: linear-gradient(to bottom, rgba(255,255,255,0.3), rgba(255,255,255,0.1));
+    position: relative;
+  }
+
+  .arrow-down::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid rgba(255,255,255,0.3);
+  }
+
+  .debate-label {
+    font-size: 10px;
+    color: #71717a;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-align: center;
+  }
+
+  .consensus-box {
+    padding: 16px 28px;
+    border-radius: 50px;
+    background: linear-gradient(135deg, #27272a, #3f3f46);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #fafafa;
+    font-weight: 600;
+    font-size: 14px;
+    margin-top: 8px;
+  }
+
+  .panel-summary {
+    margin-top: 32px;
+    padding-top: 22px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .layers-count {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #71717a;
+  }
+
+  .layers-num {
+    font-size: 48px;
+    font-weight: 800;
+    color: #f4f4f5;
+    line-height: 1;
+    margin-top: 4px;
+  }
+
+  .layers-label {
+    font-size: 13px;
+    color: #a1a1aa;
+    margin-top: 8px;
+  }
+
+  /* RIGHT — Cortex */
+  .cortex-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .layer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    transition: transform 0.2s;
+  }
+
+  .layer-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #d4d4d8;
+    flex-shrink: 0;
+  }
+
+  .layer-content {
+    flex: 1;
+  }
+
+  .layer-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f4f4f5;
+    line-height: 1.2;
+  }
+
+  .layer-desc {
+    font-size: 11px;
+    color: #71717a;
+    margin-top: 2px;
+  }
+
+  /* Selective accents — these mark which layers contain the council pattern */
+  .layer-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    padding: 2px 8px;
+    border-radius: 50px;
+    background: rgba(217, 119, 87, 0.12);
+    color: #f9a880;
+    border: 1px solid rgba(217, 119, 87, 0.3);
+    flex-shrink: 0;
+  }
+
+  .center-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #52525b;
+    font-size: 18px;
+    font-weight: 600;
+    padding: 0 4px;
+  }
+
+  /* Tagline */
+  .tagline {
+    text-align: center;
+    margin-top: 56px;
+    padding: 28px 24px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .tagline-quote {
+    font-size: 19px;
+    font-weight: 600;
+    color: #fafafa;
+    line-height: 1.5;
+    max-width: 760px;
+    margin: 0 auto 8px auto;
+  }
+
+  .tagline-attribution {
+    font-size: 11px;
+    color: #52525b;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 900px) {
+    .panels { grid-template-columns: 1fr; }
+    .center-divider { padding: 12px 0; transform: rotate(90deg); }
+    body { padding: 32px 20px; }
+    .title-row h1 { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="title-row">
+    <h1>LLM Council vs Cortex</h1>
+    <p>Primitive vs System</p>
+  </div>
+
+  <div class="panels">
+    <!-- LEFT PANEL — LLM Council -->
+    <div class="panel">
+      <div class="panel-label">The Primitive</div>
+      <div class="panel-title">LLM Council</div>
+      <div class="panel-subtitle">Multi-model voting → consensus</div>
+
+      <div class="council-stage">
+        <div class="council-models">
+          <div class="model-bubble">
+            <div class="m-name"><span class="m-dot dot-claude"></span>Claude</div>
+            <div class="m-vendor">Anthropic</div>
+          </div>
+          <div class="model-bubble">
+            <div class="m-name"><span class="m-dot dot-gpt"></span>GPT</div>
+            <div class="m-vendor">OpenAI</div>
+          </div>
+          <div class="model-bubble">
+            <div class="m-name"><span class="m-dot dot-gemini"></span>Gemini</div>
+            <div class="m-vendor">Google</div>
+          </div>
+          <div class="model-bubble">
+            <div class="m-name"><span class="m-dot dot-grok"></span>Grok</div>
+            <div class="m-vendor">xAI</div>
+          </div>
+        </div>
+
+        <div class="debate-label">debate · critique · synthesize</div>
+        <div class="arrow-down"></div>
+        <div class="consensus-box">Consensus answer</div>
+      </div>
+
+      <div class="panel-summary">
+        <div class="layers-count">Decision layers</div>
+        <div class="layers-num">1</div>
+        <div class="layers-label">"which model is right?"</div>
+      </div>
+    </div>
+
+    <div class="center-divider">vs</div>
+
+    <!-- RIGHT PANEL — Cortex -->
+    <div class="panel">
+      <div class="panel-label">The System</div>
+      <div class="panel-title">Cortex</div>
+      <div class="panel-subtitle">Routing layer above every workflow system</div>
+
+      <div class="cortex-stack">
+        <div class="layer">
+          <div class="layer-num">1</div>
+          <div class="layer-content">
+            <div class="layer-name">Classify</div>
+            <div class="layer-desc">build · review · plan · research · debug · design</div>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-num">2</div>
+          <div class="layer-content">
+            <div class="layer-name">Calibrate</div>
+            <div class="layer-desc">L1 reflex → L4 max-thoroughness</div>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-num">3</div>
+          <div class="layer-content">
+            <div class="layer-name">Route</div>
+            <div class="layer-desc">OMC · GSD · ECC · Adversarial Spec · Graphify · Direct</div>
+          </div>
+          <div class="layer-tag">council lives here</div>
+        </div>
+        <div class="layer">
+          <div class="layer-num">4</div>
+          <div class="layer-content">
+            <div class="layer-name">Specialise</div>
+            <div class="layer-desc">180+ domain agents · parallel fan-out for cross-domain work</div>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-num">5</div>
+          <div class="layer-content">
+            <div class="layer-name">Execute + Log</div>
+            <div class="layer-desc">Run the route. Log reasoning. Patterns auto-surface as defaults.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-summary">
+        <div class="layers-count">Decision layers</div>
+        <div class="layers-num">5</div>
+        <div class="layers-label">"what should the system actually DO?"</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tagline">
+    <div class="tagline-quote">
+      "Multi-LLM debate is necessary. It's nowhere close to sufficient.<br>
+      Routing is the hard problem."
+    </div>
+    <div class="tagline-attribution">github.com/amitvijapur/cortex</div>
+  </div>
+
+</div>
+</body>
+</html>
