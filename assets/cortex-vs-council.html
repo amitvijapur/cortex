@@ -101,91 +101,148 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 16px;
+    gap: 24px;
     padding: 24px 0;
   }
 
   .council-models {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 14px;
+    gap: 16px;
     width: 100%;
-    max-width: 280px;
   }
 
   .model-bubble {
-    padding: 14px 16px;
-    border-radius: 12px;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.1);
+    padding: 22px 16px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.14);
     text-align: center;
+    position: relative;
+    transition: transform 0.2s;
   }
+
+  /* Per-model corner accent — diff feature */
+  .model-bubble::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--m-color, #ffffff);
+    box-shadow: 0 0 14px var(--m-color, #ffffff);
+  }
+
+  .model-bubble.bub-claude { --m-color: #d97757; }
+  .model-bubble.bub-gpt    { --m-color: #19c37d; }
+  .model-bubble.bub-gemini { --m-color: #4285f4; }
+  .model-bubble.bub-grok   { --m-color: #cbd5e1; }
 
   .model-bubble .m-name {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    color: #d4d4d8;
-    font-weight: 600;
+    font-size: 17px;
+    color: #fafafa;
+    font-weight: 700;
   }
 
   .model-bubble .m-vendor {
-    font-size: 9px;
-    color: #52525b;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-top: 3px;
-  }
-
-  /* Each council model gets a tiny color dot — these are diff features */
-  .m-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    display: inline-block;
-    margin-right: 6px;
-    vertical-align: middle;
-  }
-  .dot-claude { background: #d97757; }
-  .dot-gpt    { background: #19c37d; }
-  .dot-gemini { background: #4285f4; }
-  .dot-grok   { background: #1da1f2; }
-
-  .arrow-down {
-    width: 2px;
-    height: 28px;
-    background: linear-gradient(to bottom, rgba(255,255,255,0.3), rgba(255,255,255,0.1));
-    position: relative;
-  }
-
-  .arrow-down::after {
-    content: '';
-    position: absolute;
-    bottom: -2px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0; height: 0;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 6px solid rgba(255,255,255,0.3);
-  }
-
-  .debate-label {
     font-size: 10px;
     color: #71717a;
     text-transform: uppercase;
-    letter-spacing: 2px;
-    text-align: center;
+    letter-spacing: 1.5px;
+    margin-top: 6px;
+  }
+
+  /* Big "DEBATE" central visual */
+  .debate-visual {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin: 6px 0;
+    width: 100%;
+  }
+
+  .debate-rings {
+    position: relative;
+    width: 110px;
+    height: 50px;
+  }
+
+  .debate-rings .ring {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 50%;
+  }
+
+  .debate-rings .ring.r1 { width: 36px;  height: 36px;  border-color: rgba(255,255,255,0.30); }
+  .debate-rings .ring.r2 { width: 64px;  height: 64px;  border-color: rgba(255,255,255,0.18); }
+  .debate-rings .ring.r3 { width: 100px; height: 100px; border-color: rgba(255,255,255,0.10); }
+
+  .debate-rings .core {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.6);
+    box-shadow: 0 0 24px rgba(255,255,255,0.4);
+  }
+
+  .debate-label {
+    font-size: 11px;
+    color: #a1a1aa;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    font-weight: 600;
   }
 
   .consensus-box {
-    padding: 16px 28px;
-    border-radius: 50px;
-    background: linear-gradient(135deg, #27272a, #3f3f46);
-    border: 1px solid rgba(255,255,255,0.12);
-    color: #fafafa;
+    padding: 22px 32px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #f4f4f5, #d4d4d8);
+    border: 1px solid rgba(255,255,255,0.4);
+    color: #18181b;
+    font-weight: 700;
+    font-size: 16px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(255,255,255,0.08);
+    width: 100%;
+  }
+
+  .consensus-box .c-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #71717a;
     font-weight: 600;
-    font-size: 14px;
-    margin-top: 8px;
+    margin-bottom: 4px;
+  }
+
+  .stars-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 6px 14px;
+    border-radius: 50px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 11px;
+    color: #a1a1aa;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .stars-stat .stars-num {
+    color: #fafafa;
+    font-weight: 700;
   }
 
   .panel-summary {
@@ -336,27 +393,40 @@
 
       <div class="council-stage">
         <div class="council-models">
-          <div class="model-bubble">
-            <div class="m-name"><span class="m-dot dot-claude"></span>Claude</div>
+          <div class="model-bubble bub-claude">
+            <div class="m-name">Claude</div>
             <div class="m-vendor">Anthropic</div>
           </div>
-          <div class="model-bubble">
-            <div class="m-name"><span class="m-dot dot-gpt"></span>GPT</div>
+          <div class="model-bubble bub-gpt">
+            <div class="m-name">GPT</div>
             <div class="m-vendor">OpenAI</div>
           </div>
-          <div class="model-bubble">
-            <div class="m-name"><span class="m-dot dot-gemini"></span>Gemini</div>
+          <div class="model-bubble bub-gemini">
+            <div class="m-name">Gemini</div>
             <div class="m-vendor">Google</div>
           </div>
-          <div class="model-bubble">
-            <div class="m-name"><span class="m-dot dot-grok"></span>Grok</div>
+          <div class="model-bubble bub-grok">
+            <div class="m-name">Grok</div>
             <div class="m-vendor">xAI</div>
           </div>
         </div>
 
-        <div class="debate-label">debate · critique · synthesize</div>
-        <div class="arrow-down"></div>
-        <div class="consensus-box">Consensus answer</div>
+        <div class="debate-visual">
+          <div class="debate-rings">
+            <div class="ring r3"></div>
+            <div class="ring r2"></div>
+            <div class="ring r1"></div>
+            <div class="core"></div>
+          </div>
+          <div class="debate-label">debate · critique · synthesize</div>
+        </div>
+
+        <div class="consensus-box">
+          <div class="c-label">Output</div>
+          Consensus answer
+        </div>
+
+        <span class="stars-stat"><span class="stars-num">30k+</span> GitHub stars</span>
       </div>
 
       <div class="panel-summary">
