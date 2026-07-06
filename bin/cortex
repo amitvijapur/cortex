@@ -8,6 +8,8 @@ Subcommands:
   learn     detect patterns in the log; writes Obsidian proposals
   reroute   mark the last entry as corrected
   doctor    audit cortex setup for drift between docs, skills, and log
+  intake    capture & triage skills/workflows dropped into a Telegram inbox
+  installs  pending-installs queue: setup commands from builds, run via 'clear list'
 """
 import argparse
 import hashlib
@@ -34,6 +36,17 @@ PROPOSALS_DIR = (OBSIDIAN_ROOT / "proposals") if OBSIDIAN_ROOT else (CLAUDE_DIR 
 PATTERN_THRESHOLD = 3
 WEEKLY_GATE_DAYS = 7
 EXPECTED_SKILLS = ["cortex-log", "cortex-learn", "cortex-reroute"]
+
+INBOX_PATH = CLAUDE_DIR / "cortex-inbox.jsonl"
+INBOX_STATES = ["pending", "reviewing", "reviewed", "building",
+                "asking", "answered", "integrated", "accepted", "rejected", "failed"]
+# "unresolved" is a filter keyword (not a stored state): anything not finished.
+INBOX_DONE = {"integrated", "rejected", "answered"}
+INBOX_FILTERS = INBOX_STATES + ["unresolved"]
+
+INSTALL_QUEUE_PATH = CLAUDE_DIR / "cortex-install-queue.jsonl"
+INSTALL_STATES = ["pending", "done", "skipped"]
+INSTALL_FILTERS = INSTALL_STATES + ["all"]
 
 
 def now_iso():
@@ -441,6 +454,230 @@ def cmd_doctor(args):
     return 1 if n_fail else 0
 
 
+
+# ── Cortex Intake: Telegram-dropped skills/workflows queue ──────────────────
+
+def read_inbox():
+    if not INBOX_PATH.exists():
+        return []
+    entries = []
+    for line in INBOX_PATH.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return entries
+
+
+def write_inbox(entries):
+    INBOX_PATH.parent.mkdir(parents=True, exist_ok=True)
+    INBOX_PATH.write_text("".join(json.dumps(e) + "\n" for e in entries))
+
+
+def _inbox_id():
+    seed = f"{datetime.now(timezone.utc).isoformat()}{os.getpid()}{os.urandom(4).hex()}"
+    return "in_" + hashlib.sha1(seed.encode()).hexdigest()[:8]
+
+
+def cmd_intake(args):
+    action = args.action
+    entries = read_inbox()
+
+    if action == "add":
+        if not args.target:
+            print("usage: cortex intake add <url> [--note ...] [--source ...]", file=sys.stderr)
+            return 1
+        entry = {
+            "id": _inbox_id(),
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "url": args.target,
+            "note": args.note or "",
+            "source": args.source or "cli",
+            "from": None,
+            "status": "pending",
+            "verdict": None,
+            "resolved_ts": None,
+        }
+        entries.append(entry)
+        write_inbox(entries)
+        print(f"queued {entry['id']}  {entry['url']}")
+        return 0
+
+    def _match(entry, want):
+        if want == "unresolved":
+            return entry.get("status") not in INBOX_DONE
+        return entry.get("status") == want
+
+    if action == "count":
+        want = args.status or "pending"
+        print(sum(1 for e in entries if _match(e, want)))
+        return 0
+
+    if action == "list":
+        rows = [e for e in entries if _match(e, args.status or "pending")]
+        if args.json:
+            print(json.dumps(rows, indent=2))
+            return 0
+        if not rows:
+            label = args.status or "pending"
+            print(f"inbox has no {label} items")
+            return 0
+        for e in rows:
+            ts = (e.get("ts") or "")[:16].replace("T", " ")
+            note = f"  — {e['note']}" if e.get("note") else ""
+            target = e.get("url") or "(note only)"
+            print(f"{e.get('id', '?'):<12} [{e.get('status', '?'):<10}] {ts}  {target}{note}")
+        return 0
+
+    if action == "show":
+        if not args.target:
+            print("usage: cortex intake show <id>", file=sys.stderr)
+            return 1
+        for e in entries:
+            if e.get("id") == args.target:
+                print(json.dumps(e, indent=2))
+                return 0
+        print(f"no entry with id {args.target}", file=sys.stderr)
+        return 1
+
+    if action == "resolve":
+        if not args.target or not args.status or args.status == "unresolved":
+            print("usage: cortex intake resolve <id> --status "
+                  "<accepted|rejected|integrated> [--note ...]", file=sys.stderr)
+            return 1
+        for e in entries:
+            if e.get("id") == args.target:
+                e["status"] = args.status
+                if args.note:
+                    e["verdict"] = args.note
+                e["resolved_ts"] = datetime.now(timezone.utc).isoformat()
+                write_inbox(entries)
+                print(f"{e['id']} → {args.status}")
+                return 0
+        print(f"no entry with id {args.target}", file=sys.stderr)
+        return 1
+
+    print(f"unknown intake action: {action}", file=sys.stderr)
+    return 1
+
+
+# ── Install queue: setup commands surfaced by builds, run via "clear list" ───
+
+def read_installs():
+    if not INSTALL_QUEUE_PATH.exists():
+        return []
+    out = []
+    for line in INSTALL_QUEUE_PATH.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            out.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return out
+
+
+def write_installs(entries):
+    INSTALL_QUEUE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    INSTALL_QUEUE_PATH.write_text("".join(json.dumps(e) + "\n" for e in entries))
+
+
+def cmd_installs(args):
+    action = args.action
+    entries = read_installs()
+
+    def _match(entry, want):
+        return True if want == "all" else entry.get("status") == want
+
+    if action == "add":
+        if not args.label or not args.command:
+            print("usage: cortex installs add --label L --command C [--command C2 ...] "
+                  "[--source ID] [--note N]", file=sys.stderr)
+            return 1
+        seed = f"{datetime.now(timezone.utc).isoformat()}{os.getpid()}{os.urandom(4).hex()}"
+        entry = {
+            "id": "iq_" + hashlib.sha1(seed.encode()).hexdigest()[:8],
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "source_id": args.source,
+            "label": args.label,
+            "commands": args.command,
+            "note": args.note or "",
+            "status": "pending",
+            "done_ts": None,
+        }
+        entries.append(entry)
+        write_installs(entries)
+        print(f"queued {entry['id']}  {entry['label']}  ({len(entry['commands'])} cmd)")
+        return 0
+
+    if action == "count":
+        print(sum(1 for e in entries if _match(e, args.status or "pending")))
+        return 0
+
+    if action == "list":
+        rows = [e for e in entries if _match(e, args.status or "pending")]
+        if args.labels:
+            print("; ".join(e.get("label", e.get("id", "?")) for e in rows))
+            return 0
+        if args.json:
+            print(json.dumps(rows, indent=2))
+            return 0
+        if not rows:
+            print(f"no {args.status or 'pending'} installs")
+            return 0
+        for e in rows:
+            print(f"{e.get('id', '?')}  [{e.get('status', '?')}]  {e.get('label', '')}")
+            for cmd in e.get("commands", []):
+                print(f"    $ {cmd}")
+            if e.get("note"):
+                print(f"    note: {e['note']}")
+        return 0
+
+    if action == "show":
+        if not args.target:
+            print("usage: cortex installs show <id>", file=sys.stderr)
+            return 1
+        for e in entries:
+            if e.get("id") == args.target:
+                print(json.dumps(e, indent=2))
+                return 0
+        print(f"no install {args.target}", file=sys.stderr)
+        return 1
+
+    if action in ("done", "skip"):
+        if not args.target:
+            print(f"usage: cortex installs {action} <id>", file=sys.stderr)
+            return 1
+        new = "done" if action == "done" else "skipped"
+        for e in entries:
+            if e.get("id") == args.target:
+                e["status"] = new
+                e["done_ts"] = datetime.now(timezone.utc).isoformat()
+                write_installs(entries)
+                print(f"{e['id']} → {new}")
+                return 0
+        print(f"no install {args.target}", file=sys.stderr)
+        return 1
+
+    if action == "clear":
+        n = 0
+        for e in entries:
+            if e.get("status") == "pending":
+                e["status"] = "done"
+                e["done_ts"] = datetime.now(timezone.utc).isoformat()
+                n += 1
+        write_installs(entries)
+        print(f"marked {n} pending install(s) done")
+        return 0
+
+    print(f"unknown installs action: {action}", file=sys.stderr)
+    return 1
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="cortex", description="Cortex routing log & self-learning loop")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -492,6 +729,32 @@ def build_parser():
     dr.add_argument("--weekly", action="store_true",
                     help=f"compact mode for SessionStart hook; gates to run at most once per {WEEKLY_GATE_DAYS} days")
     dr.set_defaults(func=cmd_doctor)
+
+    it = sub.add_parser("intake",
+                        help="Telegram → Cortex inbox: capture & triage dropped skills/workflows")
+    it.add_argument("action", choices=["list", "count", "show", "resolve", "add"])
+    it.add_argument("target", nargs="?", help="entry id (show/resolve) or url (add)")
+    it.add_argument("--status", choices=INBOX_FILTERS,
+                    help="list/count: filter by status or 'unresolved' (default pending); "
+                         "resolve: the new status")
+    it.add_argument("--note", default=None, help="add: your note; resolve: the verdict text")
+    it.add_argument("--source", default="cli", help="add: capture source label (default cli)")
+    it.add_argument("--json", action="store_true", help="machine-readable output (list)")
+    it.set_defaults(func=cmd_intake)
+
+    inst = sub.add_parser("installs",
+                          help="pending-installs queue: setup commands from builds, run via 'clear list'")
+    inst.add_argument("action", choices=["list", "count", "show", "add", "done", "skip", "clear"])
+    inst.add_argument("target", nargs="?", help="install id (show/done/skip)")
+    inst.add_argument("--status", choices=INSTALL_FILTERS,
+                      help="list/count: filter by status or 'all' (default pending)")
+    inst.add_argument("--label", help="add: human-readable label")
+    inst.add_argument("--command", action="append", help="add: a shell command (repeatable)")
+    inst.add_argument("--source", help="add: originating inbox id")
+    inst.add_argument("--note", help="add: caveat or note")
+    inst.add_argument("--labels", action="store_true", help="list: print labels only, one line")
+    inst.add_argument("--json", action="store_true", help="list: machine-readable output")
+    inst.set_defaults(func=cmd_installs)
 
     return p
 

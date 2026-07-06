@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd template for the Cortex intake bot (macOS).
+  1. Replace YOUR_USERNAME with your macOS user name.
+  2. Replace PYTHON3_PATH with `which python3` (e.g. /opt/homebrew/bin/python3).
+  3. Save as ~/Library/LaunchAgents/com.YOUR_USERNAME.cortex-intake.plist
+  4. launchctl load ~/Library/LaunchAgents/com.YOUR_USERNAME.cortex-intake.plist
+  On Linux, use a systemd user service instead (see cortex-intake/README.md).
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.YOUR_USERNAME.cortex-intake</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>PYTHON3_PATH</string>
+        <string>/Users/YOUR_USERNAME/.claude/cortex-intake/bot.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/YOUR_USERNAME/.claude/cortex-intake</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/YOUR_USERNAME/.claude/cortex-intake/logs/bot.out</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/YOUR_USERNAME/.claude/cortex-intake/logs/bot.err</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>

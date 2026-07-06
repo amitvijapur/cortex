@@ -268,3 +268,13 @@ MIT. Use it, fork it, build something better.
 Built on top of (and routes between) tools by many builders.
 
 Inspired by, and a friendly response to, [Andrej Karpathy's LLM Council](https://github.com/karpathy/llm-council). His pattern is the primitive. This is the layer above.
+
+---
+
+## Cortex Intake (optional) — review & add tools from Telegram
+
+`cortex-intake/` is an optional companion: a Telegram bot that reviews skills, MCPs, and tools you find in the wild and adds the good ones to your `cortex.md` with a tap. A headless `claude -p` does the review and the registry edit; a scoped installer runs setup commands only after you see and confirm them.
+
+It adds two `cortex` subcommands — `cortex intake` (the review inbox) and `cortex installs` (the pending-installs queue) — and ships the bot, workers, and setup templates. See **[`cortex-intake/README.md`](cortex-intake/README.md)**.
+
+**Safety:** only one component ever gets shell access, it runs only pre-authored queue commands you confirm, and it never uses `--dangerously-skip-permissions`.

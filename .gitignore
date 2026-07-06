@@ -12,3 +12,16 @@ __pycache__/
 *.swp
 .idea/
 .vscode/
+
+# Cortex intake runtime + secrets — never commit
+cortex-inbox.jsonl
+cortex-install-queue.jsonl
+cortex-proposals/
+cortex-intake/.env
+cortex-intake/.offset
+cortex-intake/bot.pid
+cortex-intake/logs/
+cortex-intake/backups/
+cortex-intake/verdicts/
+cortex-intake/results/
+cortex-intake/answers/

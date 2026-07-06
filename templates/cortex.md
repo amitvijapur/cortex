@@ -260,3 +260,14 @@ When you say "add X to Cortex", add a new section to the registry with:
 - Best for (1 line)
 - Pattern table (name + when to use)
 - Update the Decision Shortcuts table if any defaults change
+
+---
+
+## Cortex Intake (optional companion)
+
+If you run the `cortex-intake` Telegram bot, dropped links get reviewed against this file automatically and added on approval. Two surfaces track that work:
+
+- **Review inbox** (`cortex intake list`) — links you dropped, their verdicts, and status.
+- **Pending-installs queue** (`cortex installs list`) — setup commands a build surfaced but did not run. Run them with a Telegram tap, or by saying **"clear list"** in a writable session (which shows the commands, runs them, and marks them done). Only queue commands ever run; nothing is taken from a fetched page.
+
+Builds only edit this file (backed up first) and never run shell. The install worker is the single shell-capable path and runs only pre-authored, confirmed commands.
