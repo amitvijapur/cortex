@@ -2,12 +2,15 @@
 """cortex — routing decision log and self-learning loop for Cortex.
 
 Subcommands:
-  log       append a routing decision (named-flag form)
-  log-line  append a routing decision from a natural routing line
-  show      display recent routes with reasoning (filterable by --project)
-  learn     detect patterns in the log; writes Obsidian proposals
-  reroute   mark the last entry as corrected
-  doctor    audit cortex setup for drift between docs, skills, and log
+  log          append a routing decision (named-flag form)
+  log-line     append a routing decision from a natural routing line
+  show         display recent routes with reasoning (filterable by --project)
+  learn        detect patterns in the log; writes Obsidian proposals
+  reroute      mark the last entry as corrected
+  outcome      set the last entry's outcome (shipped / abandoned / partial / corrected)
+  hint         surface similar past routes for a task, weighted by outcome
+  audit-tiers  list L3/L4 routes so you can check whether L2 would have sufficed
+  doctor       audit cortex setup for drift between docs, skills, and log
 """
 import argparse
 import hashlib
@@ -34,6 +37,7 @@ PROPOSALS_DIR = (OBSIDIAN_ROOT / "proposals") if OBSIDIAN_ROOT else (CLAUDE_DIR 
 PATTERN_THRESHOLD = 3
 WEEKLY_GATE_DAYS = 7
 EXPECTED_SKILLS = ["cortex-log", "cortex-learn", "cortex-reroute"]
+OUTCOME_STATES = ["shipped", "abandoned", "partial", "corrected"]
 
 
 def now_iso():
@@ -79,7 +83,14 @@ def append_entry(entry):
 
 
 def make_entry(task, classification, system, pattern, agent, tier,
-               tier_reason, system_reason, project, redirect_from):
+               tier_reason, system_reason, project, redirect_from,
+               confidence=None, route_confidence=None, tier_confidence=None,
+               spec_confidence=None):
+    # Backwards compat: a single --confidence value seeds all three dimensions
+    # unless the caller passes the specific flags explicitly.
+    rc = route_confidence or confidence
+    tc = tier_confidence or confidence
+    sc = spec_confidence or confidence
     return {
         "ts": now_iso(),
         "session_id": session_id(),
@@ -93,10 +104,31 @@ def make_entry(task, classification, system, pattern, agent, tier,
         "tier": tier,
         "tier_reason": tier_reason,
         "system_reason": system_reason,
+        "confidence": confidence,          # kept for backwards compat with old log entries
+        "route_confidence": rc,
+        "tier_confidence": tc,
+        "spec_confidence": sc,
         "outcome": None,
         "redirect_from": redirect_from,
         "user_correction": None,
     }
+
+
+def flag_low_confidence(entry):
+    """Surface auto-trigger hints when any confidence dimension is low.
+    Spec low  → recommend a requirements interview before executing.
+    Tier low  → recommend a post-hoc `cortex audit-tiers` review.
+    Route low → recommend rerunning `cortex hint` with a broader similarity floor.
+    """
+    triggers = []
+    if entry.get("spec_confidence") == "low":
+        triggers.append("spec_confidence=low → clarify requirements before executing")
+    if entry.get("tier_confidence") == "low":
+        triggers.append("tier_confidence=low → flagged for audit-tiers review")
+    if entry.get("route_confidence") == "low":
+        triggers.append("route_confidence=low → consider rerunning `cortex hint` with --min-similarity 0.05")
+    for t in triggers:
+        print(f"  [cortex] {t}", file=sys.stderr)
 
 
 def cmd_log(args):
@@ -111,8 +143,13 @@ def cmd_log(args):
         system_reason=args.system_reason,
         project=args.project,
         redirect_from=args.redirect_from,
+        confidence=args.confidence,
+        route_confidence=args.route_confidence,
+        tier_confidence=args.tier_confidence,
+        spec_confidence=args.spec_confidence,
     )
     append_entry(entry)
+    flag_low_confidence(entry)
     print(f"logged: {args.system} > {args.pattern} @ {args.tier}", file=sys.stderr)
 
 
@@ -162,8 +199,13 @@ def cmd_log_line(args):
         system_reason=args.system_reason,
         project=args.project,
         redirect_from=args.redirect_from,
+        confidence=args.confidence,
+        route_confidence=args.route_confidence,
+        tier_confidence=args.tier_confidence,
+        spec_confidence=args.spec_confidence,
     )
     append_entry(entry)
+    flag_low_confidence(entry)
     print(f"logged: {parsed['system']} > {parsed['pattern']} @ {parsed['tier']}", file=sys.stderr)
 
 
@@ -185,10 +227,21 @@ def format_entry(e):
     if len(task) > 80:
         task = task[:77] + "..."
     flags = []
+    # Three-dimensional confidence — show compactly as r/t/s if any are set
+    rc, tc, sc = e.get("route_confidence"), e.get("tier_confidence"), e.get("spec_confidence")
+    if any([rc, tc, sc]):
+        short = {"high": "H", "med": "M", "low": "L"}
+        triple = f"r={short.get(rc, '?')}/t={short.get(tc, '?')}/s={short.get(sc, '?')}"
+        flags.append(f"[conf {triple}]")
+    elif e.get("confidence"):
+        flags.append(f"[conf={e['confidence']}]")
     if e.get("redirect_from"):
         flags.append(f"(redirect from: {e['redirect_from']})")
-    if e.get("outcome") == "corrected":
+    outcome = e.get("outcome")
+    if outcome == "corrected":
         flags.append("[CORRECTED]")
+    elif outcome in ("shipped", "abandoned", "partial"):
+        flags.append(f"[{outcome.upper()}]")
     flag_str = "  " + " ".join(flags) if flags else ""
     return f"{ts} [{proj}] {cls}{flag_str}\n  task:  {task}\n  route: {route}\n  why:   {why}"
 
@@ -342,6 +395,189 @@ def cmd_reroute(args):
     print("next /cortex log call should pass --redirect-from to link the corrected entry to the new route")
 
 
+def cmd_outcome(args):
+    entries = read_log()
+    if not entries:
+        print("cortex log is empty — nothing to mark")
+        return 0
+    # Target this project's route, not the globally-last entry: concurrent
+    # sessions in other projects log interleaved, so entries[-1] can belong to
+    # someone else's route. Prefer the latest still-open entry for the current
+    # project; fall back to the project's latest entry, then to the global last.
+    proj = project_name()
+    pool = [e for e in entries if e.get("project") == proj] or entries
+    open_entries = [e for e in pool if not e.get("outcome")]
+    last = (open_entries or pool)[-1]
+    if last.get("outcome") == "corrected":
+        print(f"last entry is already marked corrected (user_correction={last.get('user_correction')!r}); leaving as-is")
+        return 0
+    prev = last.get("outcome")
+    last["outcome"] = args.state
+    if args.note:
+        last["outcome_note"] = args.note
+    LOG_PATH.write_text("".join(json.dumps(e) + "\n" for e in entries))
+    route = f"{last.get('system', '?')} > {last.get('pattern', '?')} @ {last.get('tier', '?')}"
+    if prev:
+        print(f"updated outcome: {route}  ({prev} → {args.state})")
+    else:
+        print(f"marked outcome: {route}  → {args.state}")
+    return 0
+
+
+def tokens(s):
+    # Cheap tokenizer for similarity scoring — lowercase, strip punctuation, drop short/stopword tokens.
+    stop = {"the", "and", "for", "with", "this", "that", "from", "into", "onto",
+            "a", "an", "of", "in", "on", "at", "to", "is", "be", "as", "by",
+            "or", "if", "it", "but", "not", "so", "do", "we", "i", "my", "me"}
+    out = set()
+    for tok in re.split(r"[^a-z0-9]+", s.lower()):
+        if len(tok) >= 3 and tok not in stop:
+            out.add(tok)
+    return out
+
+
+# Outcome weighting for hint scoring: past successes add signal, corrections subtract.
+OUTCOME_WEIGHTS = {"shipped": 1.0, "partial": 0.5, "corrected": -1.0, "abandoned": -0.5}
+UNSCORED_WEIGHT = 0.3  # entry logged but never given an outcome
+
+
+def cmd_hint(args):
+    """Phase 3 (advisory mode): given a task description, surface similar past routes
+    weighted by outcome. Does NOT decide — returns evidence to factor into the route.
+
+    Filter by --tier or --class to narrow the comparison pool. Note that on a small
+    log, filtering by both fragments the pool into buckets too small to be useful —
+    prefer --class alone until the per-class pools are comfortably above ~15 entries.
+    """
+    entries = read_log()
+    if not entries:
+        print("cortex log is empty — no hint available yet")
+        return 0
+
+    target = tokens(args.task)
+    if not target:
+        print("task too short to score similarity")
+        return 0
+
+    # Filter the pool first — drastically improves signal vs noise
+    pool = entries
+    if args.tier:
+        pool = [e for e in pool if e.get("tier") == args.tier]
+    if args.classification:
+        pool = [e for e in pool if e.get("class") == args.classification]
+    if not pool:
+        filters = []
+        if args.tier:
+            filters.append(f"tier={args.tier}")
+        if args.classification:
+            filters.append(f"class={args.classification}")
+        print(f"no past entries match filter ({', '.join(filters)})")
+        return 0
+
+    scored = []
+    for e in pool:
+        toks = tokens(e.get("task", ""))
+        if not toks:
+            continue
+        jaccard = len(target & toks) / len(target | toks)
+        if jaccard >= args.min_similarity:
+            scored.append((jaccard, e))
+
+    if not scored:
+        print(f"no similar past tasks (similarity ≥ {args.min_similarity}, pool size {len(pool)})")
+        return 0
+
+    scored.sort(key=lambda x: -x[0])
+    top = scored[: args.top]
+
+    # Tally routes among top matches; weight each by its outcome
+    tally = defaultdict(float)
+    for sim, e in top:
+        route = (e.get("system"), e.get("pattern"), e.get("tier"))
+        tally[route] += sim * OUTCOME_WEIGHTS.get(e.get("outcome"), UNSCORED_WEIGHT)
+
+    print(f"hint for: {args.task!r}\n")
+    print(f"top {len(top)} similar past tasks (similarity ≥ {args.min_similarity}):")
+    for sim, e in top:
+        outcome = e.get("outcome") or "no-outcome"
+        route = f"{e.get('system', '?')} > {e.get('pattern', '?')} @ {e.get('tier', '?')}"
+        print(f"  [{sim:.2f}] [{outcome}] {route}")
+        print(f"         task: {e.get('task', '?')[:80]}")
+    print()
+
+    ranked = sorted(tally.items(), key=lambda x: -x[1])
+    print("suggested routes (weighted by outcome):")
+    for (sys_, pat, tier), score in ranked[:3]:
+        print(f"  score={score:+.2f}  {sys_} > {pat} @ {tier}")
+    print()
+    print("advisory only — you still pick the final route. negative scores mean past attempts "
+          "at that route failed or were corrected.")
+    return 0
+
+
+def cmd_audit_tiers(args):
+    """List every L3/L4 (or filtered tier) entry with task + reasoning + outcome, so you
+    can eyeball whether L2 would have sufficed and feed corrections back via --reclassify.
+    """
+    entries = read_log()
+    if args.reclassify_hash:
+        if not args.reclassify_to:
+            print("--reclassify requires --to <L1|L2|L3|L4>", file=sys.stderr)
+            return 2
+        for e in entries:
+            if e.get("task_hash") == args.reclassify_hash:
+                original = e.get("tier")
+                e["tier_audit_original"] = original
+                e["tier"] = args.reclassify_to
+                e["tier_audit_note"] = args.note
+                LOG_PATH.write_text("".join(json.dumps(x) + "\n" for x in entries))
+                print(f"reclassified {args.reclassify_hash}: {original} → {args.reclassify_to}")
+                return 0
+        print(f"no entry with task_hash={args.reclassify_hash!r}")
+        return 1
+
+    if not entries:
+        print("cortex log is empty — nothing to audit")
+        return 0
+
+    tiers_to_show = args.tier or ["L3", "L4"]
+    filtered = [e for e in entries if e.get("tier") in tiers_to_show]
+    if not filtered:
+        print(f"no entries at tier(s) {','.join(tiers_to_show)}")
+        return 0
+
+    total = len(entries)
+    outcomes = Counter(e.get("outcome") for e in filtered)
+    by_tier = Counter(e.get("tier") for e in filtered)
+
+    print(f"tier audit — {len(filtered)} of {total} routes at tiers {','.join(tiers_to_show)}")
+    print(f"  by tier:    {dict(by_tier)}")
+    print(f"  by outcome: {dict(outcomes)}\n")
+
+    for e in filtered:
+        ts = e.get("ts", "?")[:10]
+        h = e.get("task_hash", "?")
+        tier = e.get("tier", "?")
+        outcome = e.get("outcome") or "no-outcome"
+        route = f"{e.get('system', '?')} > {e.get('pattern', '?')}"
+        task = e.get("task", "?")
+        if len(task) > 90:
+            task = task[:87] + "..."
+        print(f"  {ts}  {h}  [{tier}] [{outcome}]  {route}")
+        print(f"           task: {task}")
+        reason = e.get("tier_reason") or "(no reason)"
+        if len(reason) > 100:
+            reason = reason[:97] + "..."
+        print(f"           why:  {reason}")
+        if e.get("tier_audit_original"):
+            print(f"           [reclassified from {e['tier_audit_original']}]")
+        print()
+
+    print("to reclassify an entry to a lower tier, run:")
+    print("  cortex audit-tiers --reclassify <task_hash> --to L2 [--note 'why']")
+    return 0
+
+
 def cmd_doctor(args):
     # Gate: in --weekly mode, skip silently if we ran within the gate window
     if args.weekly and DOCTOR_LAST_RUN.exists():
@@ -399,7 +635,19 @@ def cmd_doctor(args):
     elif total < 200:
         issues["pass"].append(f"Phase 2 (pattern surfacing active) — {total} routes logged")
     else:
-        issues["pass"].append(f"Phase 3 (similarity bias eligible) — {total} routes logged")
+        issues["pass"].append(f"Phase 3 (similarity bias mature) — {total} routes logged")
+
+    # Check 7 — outcome coverage: `hint` weights past routes by outcome, so an
+    # unmarked log gives every route the same flat weight and the hints go blind.
+    if entries:
+        marked = sum(1 for e in entries if e.get("outcome"))
+        if marked == 0:
+            issues["warn"].append(
+                "no route has an outcome — run `cortex outcome <shipped|abandoned|partial|corrected>` "
+                "at the end of a task so `cortex hint` can weight past routes"
+            )
+        else:
+            issues["pass"].append(f"outcome coverage: {marked}/{total} routes marked")
 
     # Render
     n_fail = len(issues["fail"])
@@ -457,6 +705,14 @@ def build_parser():
     lg.add_argument("--system-reason", default=None)
     lg.add_argument("--project", default=None)
     lg.add_argument("--redirect-from", default=None)
+    lg.add_argument("--confidence", default=None, choices=["high", "med", "low"],
+                    help="overall confidence — seeds route/tier/spec if those aren't passed individually")
+    lg.add_argument("--route-confidence", default=None, choices=["high", "med", "low"],
+                    help="confidence in the system+pattern choice (low → rerun hint with broader similarity)")
+    lg.add_argument("--tier-confidence", default=None, choices=["high", "med", "low"],
+                    help="confidence in the tier choice (low → flagged for audit-tiers review)")
+    lg.add_argument("--spec-confidence", default=None, choices=["high", "med", "low"],
+                    help="confidence in understanding the spec (low → clarify requirements before executing)")
     lg.add_argument("--shown-inline", action="store_true", help=argparse.SUPPRESS)
     lg.set_defaults(func=cmd_log)
 
@@ -469,6 +725,11 @@ def build_parser():
     ll.add_argument("--system-reason", default=None)
     ll.add_argument("--project", default=None)
     ll.add_argument("--redirect-from", default=None)
+    ll.add_argument("--confidence", default=None, choices=["high", "med", "low"],
+                    help="overall confidence — seeds route/tier/spec if those aren't passed individually")
+    ll.add_argument("--route-confidence", default=None, choices=["high", "med", "low"])
+    ll.add_argument("--tier-confidence", default=None, choices=["high", "med", "low"])
+    ll.add_argument("--spec-confidence", default=None, choices=["high", "med", "low"])
     ll.set_defaults(func=cmd_log_line)
 
     sh = sub.add_parser("show", help="display recent routes")
@@ -486,6 +747,35 @@ def build_parser():
     rr = sub.add_parser("reroute", help="mark last entry as corrected")
     rr.add_argument("--to", required=True, help="the corrected route")
     rr.set_defaults(func=cmd_reroute)
+
+    oc = sub.add_parser("outcome", help="set the last entry's outcome")
+    oc.add_argument("state", choices=OUTCOME_STATES,
+                    help="shipped (worked, done) / abandoned (route was wrong, moved on) / "
+                         "partial (some progress, stopped before goal) / corrected (rerouted mid-flow)")
+    oc.add_argument("--note", default=None, help="optional free-text note")
+    oc.set_defaults(func=cmd_outcome)
+
+    hn = sub.add_parser("hint", help="advisory: surface similar past routes for a task")
+    hn.add_argument("task", help="one-line task description to find similar past routes for")
+    hn.add_argument("--top", type=int, default=5, help="number of similar past tasks to consider (default 5)")
+    hn.add_argument("--min-similarity", type=float, default=0.15,
+                    help="minimum Jaccard similarity to count as related (default 0.15)")
+    hn.add_argument("--tier", choices=["L1", "L2", "L3", "L4"],
+                    help="filter past routes to a matching tier (only useful once the log is large)")
+    hn.add_argument("--class", dest="classification",
+                    choices=["build", "review", "plan", "research", "debug", "design", "quickfix"],
+                    help="filter past routes to a matching task class")
+    hn.set_defaults(func=cmd_hint)
+
+    at = sub.add_parser("audit-tiers", help="audit L3/L4 routes — check whether L2 would have sufficed")
+    at.add_argument("--tier", action="append", choices=["L1", "L2", "L3", "L4"],
+                    help="tiers to include (default: L3 and L4). pass multiple times for multiple tiers")
+    at.add_argument("--reclassify", dest="reclassify_hash", default=None,
+                    metavar="TASK_HASH", help="reclassify a single entry by task_hash")
+    at.add_argument("--to", dest="reclassify_to", choices=["L1", "L2", "L3", "L4"],
+                    help="new tier (with --reclassify)")
+    at.add_argument("--note", default=None, help="reason for the reclassification")
+    at.set_defaults(func=cmd_audit_tiers)
 
     dr = sub.add_parser("doctor", help="audit cortex setup for drift between docs, skills, and log")
     dr.add_argument("-v", "--verbose", action="store_true", help="show passing checks too")

@@ -4,6 +4,9 @@ cortex-doctor-last-run
 proposals/
 retros/
 
+# OMC working state — session ids, agent replays, model transcripts
+.omc/
+
 # Standard
 __pycache__/
 *.pyc
