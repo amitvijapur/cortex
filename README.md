@@ -1,6 +1,19 @@
+<div align="center">
+
+<img src="assets/cortex-logo.png" alt="Cortex logo" width="130" />
+
 # Cortex
 
-> **A meta-router for Claude Code.** It sits above every workflow system in your stack and decides — per task — which system runs, which specialist drives, and how much effort the work deserves. Then it logs the decision and learns from the outcome.
+**A meta-router for Claude Code.** It sits above every workflow system in your stack and decides — per task — which system runs, which specialist drives, and how much effort the work deserves. Then it logs the decision and learns from the outcome.
+
+<img src="assets/cortex-hero.png" alt="Cortex routes each task to the right system" width="820" />
+
+[![for Claude Code](https://img.shields.io/badge/for-Claude%20Code-2c5282?style=flat-square)](https://claude.com/claude-code)
+&nbsp;![effort L1–L4](https://img.shields.io/badge/effort-L1%E2%80%93L4-4a9eff?style=flat-square)
+&nbsp;![self-learning loop](https://img.shields.io/badge/self--learning-loop-63b3ed?style=flat-square)
+&nbsp;![license MIT](https://img.shields.io/badge/license-MIT-64748b?style=flat-square)
+
+</div>
 
 ```
                                   [ Task arrives ]
