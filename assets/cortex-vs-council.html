@@ -376,6 +376,29 @@
     body { padding: 32px 20px; }
     .title-row h1 { font-size: 32px; }
   }
+
+  /* Cortex — steel-blue brand accent (matches the logo) */
+  .cortex-panel { border-color: rgba(74,158,255,0.28); background: rgba(74,158,255,0.02); }
+  .cortex-panel .panel-title {
+    background: linear-gradient(135deg, #eaf2fb, #63b3ed 55%, #4a9eff);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .cortex-panel .layers-num {
+    background: linear-gradient(135deg, #eaf2fb, #4a9eff);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .cortex-panel .layer {
+    border-color: rgba(74,158,255,0.15);
+    background: rgba(74,158,255,0.04);
+  }
+  .cortex-panel .layer-num {
+    background: rgba(74,158,255,0.14);
+    border-color: rgba(74,158,255,0.42);
+    color: #9dcbff;
+    box-shadow: 0 0 12px rgba(74,158,255,0.18);
+  }
 </style>
 </head>
 <body>
@@ -441,7 +464,7 @@
     <div class="center-divider">vs</div>
 
     <!-- RIGHT PANEL — Cortex -->
-    <div class="panel">
+    <div class="panel cortex-panel">
       <div class="panel-label">The System</div>
       <div class="panel-title">Cortex</div>
       <div class="panel-subtitle">Routing layer above every workflow system</div>
