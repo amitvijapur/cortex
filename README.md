@@ -454,6 +454,7 @@ Cortex is only as good as the registry underneath it. Mine is below — not beca
 
 | Tool | What it's for |
 |---|---|
+| [Agency Agents](https://github.com/msitarzewski/agency-agents) | 230+ domain specialists across 18 divisions — engineering, security, design, finance, GIS, marketing, and more. The specialist pool the router fans out across, and where `Specialise` picks a driver (or several). |
 | [anthropics/skills](https://github.com/anthropics/skills) | First-party document skills: `docx`, `pdf`, `pptx`, `xlsx`, plus `mcp-builder` and `skill-creator`. |
 | [knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins) | Anthropic's non-code plugins — data, legal, enterprise search, PM, marketing. |
 | [financial-services](https://github.com/anthropics/financial-services) | DCF, LBO, comps, earnings analysis, pitch decks — with live Excel and PowerPoint integration. |
