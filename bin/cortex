@@ -22,7 +22,14 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-CLAUDE_DIR = Path(os.environ.get("CLAUDE_DIR", Path.home() / ".claude"))
+# State directory. CORTEX_HOME is the tool-neutral override (use it with any agent);
+# CLAUDE_DIR is kept for backward compatibility; default is ~/.claude so existing
+# Claude Code installs are unchanged.
+CLAUDE_DIR = Path(
+    os.environ.get("CORTEX_HOME")
+    or os.environ.get("CLAUDE_DIR")
+    or (Path.home() / ".claude")
+)
 LOG_PATH = CLAUDE_DIR / "cortex-log.jsonl"
 CORTEX_MD = CLAUDE_DIR / "cortex.md"
 SKILLS_DIR = CLAUDE_DIR / "skills"
