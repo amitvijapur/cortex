@@ -40,6 +40,7 @@ Cortex does not replace your workflow systems. It picks between them, attaches t
 
 - [Why this exists](#why-this-exists)
 - [Install](#install)
+- [Using Cortex with other agents](#using-cortex-with-other-agents)
 - [How it works](#how-it-works)
   - [The routing protocol](#the-routing-protocol)
   - [The tier system](#the-tier-system-l1l4)
@@ -83,6 +84,8 @@ The second thing it does is remember. Every route is logged with its reasoning a
 
 Requires [Claude Code](https://claude.com/claude-code) with a `~/.claude/` directory. Python 3 for the CLI. Tested on macOS and Linux.
 
+Using a different agent — Cursor, Codex, Gemini CLI, Aider, Windsurf? Cortex works there too; see [Using Cortex with other agents](#using-cortex-with-other-agents).
+
 ```bash
 git clone https://github.com/amitvijapur/cortex.git
 cd cortex
@@ -114,6 +117,34 @@ It does **not** touch `~/.claude/settings.json`. The SessionStart hook is opt-in
 
 ---
 
+## Using Cortex with other agents
+
+Cortex is built for Claude Code, but nothing about it is Claude-specific underneath. The framework is a single Markdown file (`cortex.md`) and the CLI is plain Python that reads and writes a state directory. Any coding agent that loads a Markdown instructions or rules file can run the same protocol.
+
+**1. Point the CLI at a neutral state directory (optional).** By default the CLI keeps its log and state in `~/.claude/`. Set `CORTEX_HOME` to put it anywhere:
+
+```bash
+export CORTEX_HOME="$HOME/.cortex"   # add to your shell profile
+python3 bin/cortex doctor            # now reads and writes ~/.cortex
+```
+
+If `CORTEX_HOME` is unset it falls back to `~/.claude`, so existing Claude Code installs are unchanged. `CLAUDE_DIR` is still honoured for backward compatibility.
+
+**2. Load `cortex.md` into your agent's instructions file.** Each tool reads its own:
+
+| Agent | Where the framework goes |
+|---|---|
+| **Claude Code** | `~/.claude/cortex.md`, referenced from `CLAUDE.md` with `@cortex.md` |
+| **Codex CLI** (or any `AGENTS.md` tool) | paste `cortex.md` into `AGENTS.md` — repo root, or `~/.codex/AGENTS.md` for global |
+| **Cursor** | save as `.cursor/rules/cortex.mdc`, or add it to User Rules in Settings |
+| **Gemini CLI** | add the contents to `GEMINI.md` |
+| **Windsurf** | save as `.windsurf/rules/cortex.md` (or legacy `.windsurfrules`) |
+| **Aider** | point `read:` in `.aider.conf.yml` at `cortex.md`, or fold it into `CONVENTIONS.md` |
+
+The routing protocol, the effort tiers, and the self-learning loop are all tool-agnostic. Only two things are Claude Code conveniences: the **slash-command skills** (other agents call `python3 bin/cortex …` directly instead), and the example **Workflow Registry** — swap that for whatever systems your agent can actually invoke.
+
+---
+
 ## How it works
 
 ### The routing protocol
@@ -121,6 +152,7 @@ It does **not** touch `~/.claude/settings.json`. The SessionStart hook is opt-in
 Every non-trivial task runs through eight steps before and after execution.
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'lineColor':'#4a9eff','primaryColor':'#eaf2fb','primaryTextColor':'#0f2942','primaryBorderColor':'#4a9eff','fontFamily':'ui-sans-serif, system-ui, sans-serif'}}}%%
 flowchart TD
     A[Task arrives] --> B{Trivial?<br/>lookup · file read · one-liner}
     B -->|yes| Z[Skip protocol.<br/>Just do it.]
@@ -138,9 +170,9 @@ flowchart TD
     K --> M
     M -.feeds future hints.-> E
 
-    style D fill:#2d3748,stroke:#4a5568,color:#fff
-    style H fill:#2d3748,stroke:#4a5568,color:#fff
-    style M fill:#1a365d,stroke:#2c5282,color:#fff
+    style D fill:#1a365d,stroke:#4a9eff,color:#fff
+    style H fill:#1a365d,stroke:#4a9eff,color:#fff
+    style M fill:#0f1729,stroke:#4a9eff,color:#fff
 ```
 
 The output of steps 1 through 6 is always a single declared line, printed **before** execution starts:
@@ -175,6 +207,7 @@ Tier is a **depth** decision: how much machinery does correctness actually requi
 **The default is L2.** Heuristics push up or down from there — blast radius, ambiguity, stakes, novelty, reversibility, and how certain you sounded when you asked.
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'lineColor':'#4a9eff','primaryColor':'#eaf2fb','primaryTextColor':'#0f2942','primaryBorderColor':'#4a9eff','fontFamily':'ui-sans-serif, system-ui, sans-serif'}}}%%
 flowchart TD
     S[Task classified] --> Q1{Can I undo this<br/>with one command?}
     Q1 -->|no — prod, migration,<br/>payments, auth| T3[L3 floor]
@@ -224,6 +257,7 @@ The mistake I kept making was treating multi-agent work as an *upgrade* — some
 If a task spans two or more independent domains, parallel specialists plus a reconciler is the *correct* shape — at whatever tier the work actually warrants. A well-scoped L2 fan-out is a perfectly normal thing. Running a cross-domain task through a single generalist agent is a routing bug, not a saving.
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'lineColor':'#4a9eff','primaryColor':'#eaf2fb','primaryTextColor':'#0f2942','primaryBorderColor':'#4a9eff','fontFamily':'ui-sans-serif, system-ui, sans-serif'}}}%%
 flowchart LR
     A[Build a checkout page:<br/>Stripe + tracking + a11y polish] --> B{Domain breadth}
     B -->|3 independent disciplines| C[Fan out]
@@ -235,8 +269,8 @@ flowchart LR
     F --> G
     G --> H[Single coherent result]
 
-    style C fill:#2d3748,stroke:#4a5568,color:#fff
-    style G fill:#1a365d,stroke:#2c5282,color:#fff
+    style C fill:#1a365d,stroke:#4a9eff,color:#fff
+    style G fill:#0f1729,stroke:#4a9eff,color:#fff
 ```
 
 For high-stakes fan-outs — anything customer-facing, money-moving, or security-critical — the reconciler is upgraded from a single agent to a full [CCG council](#ccg-the-council-as-one-tool).
@@ -299,6 +333,7 @@ Every route is appended to `~/.claude/cortex-log.jsonl` as a byproduct of workin
 The loop closes on itself:
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'lineColor':'#4a9eff','primaryColor':'#eaf2fb','primaryTextColor':'#0f2942','primaryBorderColor':'#4a9eff','fontFamily':'ui-sans-serif, system-ui, sans-serif'}}}%%
 flowchart LR
     A[Route a task] --> B[Log decision<br/>+ reasoning<br/>+ 3 confidences]
     B --> C[Execute]
@@ -312,8 +347,8 @@ flowchart LR
     I --> A
     H -.you reclassify.-> E
 
-    style E fill:#1a365d,stroke:#2c5282,color:#fff
-    style I fill:#22543d,stroke:#2f855a,color:#fff
+    style E fill:#0f1729,stroke:#4a9eff,color:#fff
+    style I fill:#1a365d,stroke:#4a9eff,color:#fff
 ```
 
 Phases activate on data thresholds, not on a calendar:
