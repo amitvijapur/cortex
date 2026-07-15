@@ -154,29 +154,7 @@ The routing protocol, the effort tiers, and the self-learning loop are all tool-
 
 Every non-trivial task runs through eight steps before and after execution.
 
-```mermaid
-%%{init: {'theme':'base','themeVariables':{'lineColor':'#4a9eff','primaryColor':'#eaf2fb','primaryTextColor':'#0f2942','primaryBorderColor':'#4a9eff','fontFamily':'ui-sans-serif, system-ui, sans-serif'}}}%%
-flowchart TD
-    A[Task arrives] --> B{Trivial?<br/>lookup · file read · one-liner}
-    B -->|yes| Z[Skip protocol.<br/>Just do it.]
-    B -->|no| C[1 · Classify<br/>build / review / plan / research<br/>debug / design / quickfix]
-    C --> D[2 · Calibrate<br/>pick effort tier L1–L4<br/>anti-inflation rule first]
-    D --> E[3 · Hint<br/>cortex hint — surface similar<br/>past routes, weighted by outcome]
-    E --> F[4 · Route<br/>pick the workflow system<br/>from your registry]
-    F --> G[5 · Specialise<br/>pick agents — fan out if the task<br/>spans 2+ disciplines]
-    G --> H[6 · State + Log<br/>declare the route out loud<br/>log it with 3 confidences]
-    H --> I[7 · Execute]
-    I --> J{Correction?<br/>'reroute' · 'wrong approach'<br/>'actually use X'}
-    J -->|yes| K[cortex reroute<br/>mark corrected, relink] --> F
-    J -->|no| L[8 · Outcome<br/>shipped / partial / abandoned]
-    L --> M[(cortex-log.jsonl)]
-    K --> M
-    M -.feeds future hints.-> E
-
-    style D fill:#1a365d,stroke:#4a9eff,color:#fff
-    style H fill:#1a365d,stroke:#4a9eff,color:#fff
-    style M fill:#0f1729,stroke:#4a9eff,color:#fff
-```
+<p align="center"><img src="assets/routing-protocol.svg" alt="The routing protocol: classify, calibrate, hint, route, specialise, log, execute, outcome; outcomes feed future hints" width="880"></p>
 
 The output of steps 1 through 6 is always a single declared line, printed **before** execution starts:
 
@@ -209,24 +187,7 @@ Tier is a **depth** decision: how much machinery does correctness actually requi
 
 **The default is L2.** Heuristics push up or down from there — blast radius, ambiguity, stakes, novelty, reversibility, and how certain you sounded when you asked.
 
-```mermaid
-%%{init: {'theme':'base','themeVariables':{'lineColor':'#4a9eff','primaryColor':'#eaf2fb','primaryTextColor':'#0f2942','primaryBorderColor':'#4a9eff','fontFamily':'ui-sans-serif, system-ui, sans-serif'}}}%%
-flowchart TD
-    S[Task classified] --> Q1{Can I undo this<br/>with one command?}
-    Q1 -->|no — prod, migration,<br/>payments, auth| T3[L3 floor]
-    Q1 -->|yes| Q2{Is the solution<br/>genuinely unclear?}
-    Q2 -->|no — I just<br/>need to type it| T2[L2]
-    Q2 -->|yes| Q3{Does proving it works<br/>need more than a read-through?}
-    Q3 -->|no| T2
-    Q3 -->|yes| T3
-    T3 --> Q4{Life-affecting,<br/>money-moving,<br/>or security-critical?}
-    Q4 -->|yes| T4[L4 · full verify loop]
-    Q4 -->|no| T3F[L3 · verifier pass]
-
-    style T2 fill:#22543d,stroke:#2f855a,color:#fff
-    style T3F fill:#744210,stroke:#975a16,color:#fff
-    style T4 fill:#742a2a,stroke:#9b2c2c,color:#fff
-```
+<p align="center"><img src="assets/tier-ladder.svg" alt="Effort tiers L1 to L4, escalating from reflex to max rigor, with L2 as the default" width="820"></p>
 
 You can always override in plain language: *"go light"* forces L1, *"be thorough"* forces L3, *"must be perfect"* or *"ultrathink"* forces L4. *"bump it"* and *"drop it"* move one tier.
 
@@ -259,22 +220,7 @@ The mistake I kept making was treating multi-agent work as an *upgrade* — some
 
 If a task spans two or more independent domains, parallel specialists plus a reconciler is the *correct* shape — at whatever tier the work actually warrants. A well-scoped L2 fan-out is a perfectly normal thing. Running a cross-domain task through a single generalist agent is a routing bug, not a saving.
 
-```mermaid
-%%{init: {'theme':'base','themeVariables':{'lineColor':'#4a9eff','primaryColor':'#eaf2fb','primaryTextColor':'#0f2942','primaryBorderColor':'#4a9eff','fontFamily':'ui-sans-serif, system-ui, sans-serif'}}}%%
-flowchart LR
-    A[Build a checkout page:<br/>Stripe + tracking + a11y polish] --> B{Domain breadth}
-    B -->|3 independent disciplines| C[Fan out]
-    C --> D[Frontend Developer]
-    C --> E[Stripe skill]
-    C --> F[Accessibility Auditor]
-    D --> G[Software Architect<br/>reconciler]
-    E --> G
-    F --> G
-    G --> H[Single coherent result]
-
-    style C fill:#1a365d,stroke:#4a9eff,color:#fff
-    style G fill:#0f1729,stroke:#4a9eff,color:#fff
-```
+<p align="center"><img src="assets/fan-out.svg" alt="A cross-domain task fans out to parallel specialists, then converges through a reconciler into one result" width="880"></p>
 
 For high-stakes fan-outs — anything customer-facing, money-moving, or security-critical — the reconciler is upgraded from a single agent to a full [CCG council](#ccg-the-council-as-one-tool).
 
@@ -335,24 +281,7 @@ Every route is appended to `~/.claude/cortex-log.jsonl` as a byproduct of workin
 
 The loop closes on itself:
 
-```mermaid
-%%{init: {'theme':'base','themeVariables':{'lineColor':'#4a9eff','primaryColor':'#eaf2fb','primaryTextColor':'#0f2942','primaryBorderColor':'#4a9eff','fontFamily':'ui-sans-serif, system-ui, sans-serif'}}}%%
-flowchart LR
-    A[Route a task] --> B[Log decision<br/>+ reasoning<br/>+ 3 confidences]
-    B --> C[Execute]
-    C --> D[Record outcome<br/>shipped · partial<br/>abandoned · corrected]
-    D --> E[(cortex-log.jsonl)]
-    E --> F[cortex hint<br/>similar past routes,<br/>weighted by outcome]
-    E --> G[cortex learn<br/>repeating patterns →<br/>Decision Shortcuts]
-    E --> H[cortex audit-tiers<br/>was that L3<br/>really an L3?]
-    F --> A
-    G -.you approve.-> I[cortex.md<br/>Decision Shortcuts]
-    I --> A
-    H -.you reclassify.-> E
-
-    style E fill:#0f1729,stroke:#4a9eff,color:#fff
-    style I fill:#1a365d,stroke:#4a9eff,color:#fff
-```
+<p align="center"><img src="assets/self-learning.svg" alt="The self-learning loop: route, execute, outcome, log, hint; every task sharpens the next route" width="880"></p>
 
 Phases activate on data thresholds, not on a calendar:
 
