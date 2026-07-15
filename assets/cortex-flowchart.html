@@ -11,7 +11,7 @@
 
   body {
     font-family: 'Inter', -apple-system, sans-serif;
-    background: #0a0a0a;
+    background: #0b1220;
     color: #e4e4e7;
     min-height: 100vh;
     padding: 60px 40px;
@@ -144,15 +144,16 @@
     width: 26px;
     height: 26px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.12);
+    background: radial-gradient(circle at 50% 38%, #7cbaff, #2b6fd6);
+    border: 1px solid rgba(140,190,255,0.7);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 11px;
     font-weight: 600;
-    color: #d4d4d8;
+    color: #eef6ff;
     flex-shrink: 0;
+    box-shadow: 0 0 14px rgba(74,158,255,0.5), 0 0 4px rgba(74,158,255,0.85);
   }
 
   .step-text {
@@ -399,7 +400,7 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: #0a0a0a;
+    background: #0b1220;
     padding: 2px 12px;
     font-size: 10px;
     text-transform: uppercase;
@@ -720,7 +721,7 @@
   <!-- Header -->
   <div class="header">
     <h1>Cortex</h1>
-    <p>Workflow Routing Layer for Claude Code</p>
+    <p>Workflow Routing Layer for coding agents</p>
   </div>
 
   <!-- Entry -->
@@ -865,7 +866,7 @@
       <!-- Agency Agents -->
       <div class="system-card card-agents">
         <div class="card-header">
-          <div class="system-icon">180+</div>
+          <div class="system-icon">230+</div>
           <div class="card-titles">
             <div class="system-name">Agency Agents</div>
             <div class="system-subtitle">~/.claude/agents/</div>
@@ -884,7 +885,7 @@
           <span class="pattern-tag">Minimal Change</span>
           <span class="pattern-tag">Chief of Staff</span>
           <span class="pattern-tag">Agentic Search Optimizer</span>
-          <span class="pattern-tag">+170 more</span>
+          <span class="pattern-tag">+220 more</span>
         </div>
       </div>
       <!-- Tessl -->
@@ -1380,7 +1381,7 @@
 
   <!-- Footer -->
   <div class="footer">
-    Cortex &mdash; Meta-router for Claude Code &middot; Loaded globally across all projects
+    Cortex &mdash; Meta-router for coding agents &middot; built for Claude Code, runs on Cursor · Codex · Gemini CLI · Aider · Windsurf
   </div>
 
 </div>
