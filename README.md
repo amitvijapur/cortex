@@ -4,11 +4,14 @@
 
 # Cortex
 
-**A meta-router for Claude Code.** It sits above every workflow system in your stack and decides — per task — which system runs, which specialist drives, and how much effort the work deserves. Then it logs the decision and learns from the outcome.
+**A meta-router for coding agents.** It sits above every workflow system in your stack and decides — per task — which system runs, which specialist drives, and how much effort the work deserves. Then it logs the decision and learns from the outcome.
+
+<sub>Built for **Claude Code** · runs on **Cursor, Codex, Gemini CLI, Aider & Windsurf** too — [see how ↓](#using-cortex-with-other-agents)</sub>
 
 <img src="assets/cortex-hero.png" alt="Cortex routes each task to the right system" width="820" />
 
-[![for Claude Code](https://img.shields.io/badge/for-Claude%20Code-2c5282?style=flat-square)](https://claude.com/claude-code)
+[![built for Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-2c5282?style=flat-square)](https://claude.com/claude-code)
+&nbsp;![works with any coding agent](https://img.shields.io/badge/also_runs_on-Cursor%20·%20Codex%20·%20Gemini%20·%20Aider-2f855a?style=flat-square)
 &nbsp;![effort L1–L4](https://img.shields.io/badge/effort-L1%E2%80%93L4-4a9eff?style=flat-square)
 &nbsp;![self-learning loop](https://img.shields.io/badge/self--learning-loop-63b3ed?style=flat-square)
 &nbsp;![license MIT](https://img.shields.io/badge/license-MIT-64748b?style=flat-square)
