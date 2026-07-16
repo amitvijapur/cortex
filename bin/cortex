@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -696,6 +697,183 @@ def cmd_doctor(args):
     return 1 if n_fail else 0
 
 
+# ---------- init: discovery scan (M1) ----------
+# Files/stems that live in an agents dir but are not agents.
+_NON_AGENT = {"readme", "contributing", "security", "license", "code_of_conduct", "changelog", "index"}
+
+# Multi-tool config files to probe: (label, [relative names], [roots to check])
+TOOL_CONFIGS = [
+    ("Claude Code (CLAUDE.md)", ["CLAUDE.md"], [CLAUDE_DIR, Path.home(), Path.cwd()]),
+    ("Codex / AGENTS.md", ["AGENTS.md"], [Path.cwd(), Path.home() / ".codex"]),
+    ("Gemini CLI (GEMINI.md)", ["GEMINI.md"], [Path.cwd(), Path.home() / ".gemini", Path.home()]),
+    ("Cursor (.cursor/rules)", [".cursor/rules"], [Path.cwd()]),
+    ("Windsurf (.windsurf/rules)", [".windsurf/rules", ".windsurfrules"], [Path.cwd()]),
+    ("Aider", [".aider.conf.yml", "CONVENTIONS.md"], [Path.cwd(), Path.home()]),
+]
+
+KNOWN_CLIS = ["claude", "codex", "gemini", "aider", "qwen", "agent-browser",
+              "cursor", "windsurf", "gh", "graphify", "kronos", "docker"]
+
+
+def _read_frontmatter(path):
+    """Best-effort 'name'/'description' from a markdown file's YAML frontmatter."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None, None
+    m = re.match(r"^---\s*\n(.*?)\n---", text, re.S)
+    block = m.group(1) if m else "\n".join(text.splitlines()[:8])
+    name = desc = None
+    for line in block.splitlines():
+        mn = re.match(r'^\s*name:\s*"?(.+?)"?\s*$', line)
+        md = re.match(r'^\s*description:\s*"?(.+?)"?\s*$', line)
+        if mn and not name:
+            name = mn.group(1).strip()
+        if md and not desc:
+            desc = md.group(1).strip()
+    return name, desc
+
+
+def _scan_skills(base):
+    items = []
+    if not base.exists():
+        return items
+    for sub in sorted(p for p in base.iterdir() if p.is_dir()):
+        f = sub / "SKILL.md"
+        if f.exists():
+            name, desc = _read_frontmatter(f)
+            items.append({"name": name or sub.name, "description": desc})
+    return items
+
+
+def _scan_commands(base):
+    if not base.exists():
+        return []
+    return sorted(f.stem for f in base.rglob("*.md") if f.stem.lower() not in _NON_AGENT)
+
+
+def _scan_agents(base):
+    if not base.exists():
+        return {"count": 0, "divisions": {}, "sample": []}
+    agents = []
+    for f in base.rglob("*.md"):
+        if f.stem.lower() in _NON_AGENT:
+            continue
+        rel = f.relative_to(base)
+        division = rel.parts[0] if len(rel.parts) > 1 else "(root)"
+        name, _ = _read_frontmatter(f)
+        agents.append((name or f.stem, division))
+    return {
+        "count": len(agents),
+        "divisions": dict(Counter(d for _, d in agents)),
+        "sample": [n for n, _ in agents[:12]],
+    }
+
+
+def _scan_mcp_servers():
+    """MCP servers live in a few possible files; merge whatever we find."""
+    servers = set()
+    for path in [CLAUDE_DIR / "settings.json", Path.home() / ".claude.json", Path.cwd() / ".mcp.json"]:
+        if not path.exists():
+            continue
+        try:
+            d = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(d.get("mcpServers"), dict):
+            servers.update(d["mcpServers"].keys())
+        projects = d.get("projects")
+        if isinstance(projects, dict):
+            for proj in projects.values():
+                if isinstance(proj, dict) and isinstance(proj.get("mcpServers"), dict):
+                    servers.update(proj["mcpServers"].keys())
+    return sorted(servers)
+
+
+def _scan_settings_meta(path):
+    out = {"hooks": [], "plugins": []}
+    if not path.exists():
+        return out
+    try:
+        d = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return out
+    if isinstance(d.get("hooks"), dict):
+        out["hooks"] = sorted(d["hooks"].keys())
+    for key in ("enabledPlugins", "enabled_plugins"):
+        v = d.get(key)
+        if isinstance(v, dict):
+            out["plugins"] = sorted(v.keys())
+        elif isinstance(v, list):
+            out["plugins"] = list(v)
+    return out
+
+
+def _detect_tool_configs():
+    found = []
+    for label, rels, roots in TOOL_CONFIGS:
+        for root in roots:
+            hit = next((str(root / rel) for rel in rels if (root / rel).exists()), None)
+            if hit:
+                found.append({"tool": label, "path": hit})
+                break
+    return found
+
+
+def build_inventory():
+    meta = _scan_settings_meta(CLAUDE_DIR / "settings.json")
+    return {
+        "generated": now_iso(),
+        "claude_dir": str(CLAUDE_DIR),
+        "agents": _scan_agents(CLAUDE_DIR / "agents"),
+        "skills": _scan_skills(SKILLS_DIR),
+        "commands": _scan_commands(CLAUDE_DIR / "commands"),
+        "mcp_servers": _scan_mcp_servers(),
+        "hooks": meta["hooks"],
+        "plugins": meta["plugins"],
+        "tool_configs": _detect_tool_configs(),
+        "clis": [c for c in KNOWN_CLIS if shutil.which(c)],
+        "existing_cortex_md": CORTEX_MD.exists(),
+    }
+
+
+def cmd_init(args):
+    inv = build_inventory()
+    out_path = Path(args.out) if args.out else (CLAUDE_DIR / "cortex-inventory.json")
+    if not args.dry_run:
+        try:
+            out_path.write_text(json.dumps(inv, indent=2), encoding="utf-8")
+        except OSError as e:
+            print(f"could not write {out_path}: {e}", file=sys.stderr)
+
+    ag = inv["agents"]
+    print("cortex init — discovery scan (M1)\n")
+    print(f"  state dir:     {inv['claude_dir']}")
+    agents_line = f"  agents:        {ag['count']}"
+    if ag["divisions"]:
+        agents_line += f" across {len(ag['divisions'])} divisions"
+    print(agents_line)
+    if ag["divisions"]:
+        top = sorted(ag["divisions"].items(), key=lambda kv: -kv[1])[:6]
+        print("                 " + ", ".join(f"{k} ({v})" for k, v in top))
+    print(f"  skills:        {len(inv['skills'])}")
+    print(f"  commands:      {len(inv['commands'])}")
+    mcp = inv["mcp_servers"]
+    mcp_line = f"  MCP servers:   {len(mcp)}"
+    if mcp:
+        mcp_line += " — " + ", ".join(mcp[:8]) + (" …" if len(mcp) > 8 else "")
+    print(mcp_line)
+    print(f"  hooks:         {len(inv['hooks'])} event(s)")
+    print(f"  plugins:       {len(inv['plugins'])}")
+    print(f"  other agents:  {', '.join(tc['tool'] for tc in inv['tool_configs']) or 'none detected'}")
+    print(f"  relevant CLIs: {', '.join(inv['clis']) or 'none detected'}")
+    print(f"  cortex.md:     {'exists → M4 will MERGE, never overwrite' if inv['existing_cortex_md'] else 'not present → M4 will create'}")
+    if not args.dry_run:
+        print(f"\n  → inventory written to {out_path}")
+    print("\n  Next (not yet built): M2 interview → M3 registry synthesis → M4 merge.")
+    return 0
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="cortex", description="Cortex routing log & self-learning loop")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -789,6 +967,11 @@ def build_parser():
     dr.add_argument("--weekly", action="store_true",
                     help=f"compact mode for SessionStart hook; gates to run at most once per {WEEKLY_GATE_DAYS} days")
     dr.set_defaults(func=cmd_doctor)
+
+    ini = sub.add_parser("init", help="discover your existing systems (M1: scan) to prepare a personalized registry")
+    ini.add_argument("--out", help="where to write the inventory JSON (default: <state-dir>/cortex-inventory.json)")
+    ini.add_argument("--dry-run", action="store_true", help="print the summary without writing the inventory file")
+    ini.set_defaults(func=cmd_init)
 
     return p
 
