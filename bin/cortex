@@ -11,6 +11,7 @@ Subcommands:
   hint         surface similar past routes for a task, weighted by outcome
   audit-tiers  list L3/L4 routes so you can check whether L2 would have sufficed
   doctor       audit cortex setup for drift between docs, skills, and log
+  init         discover your existing systems to prepare a personalized registry
 """
 import argparse
 import hashlib

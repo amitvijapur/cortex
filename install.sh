@@ -25,8 +25,8 @@ mkdir -p "$BIN_DIR" "$SKILLS_DIR"
 install -m 0755 "$SCRIPT_DIR/bin/cortex" "$BIN_DIR/cortex"
 green "  ✓ bin/cortex          → $BIN_DIR/cortex"
 
-# 2. Skills (3 of them)
-for skill in cortex-log cortex-learn cortex-reroute; do
+# 2. Skills
+for skill in cortex-log cortex-learn cortex-reroute cortex-init; do
   mkdir -p "$SKILLS_DIR/$skill"
   cp "$SCRIPT_DIR/skills/$skill/SKILL.md" "$SKILLS_DIR/$skill/SKILL.md"
   green "  ✓ skills/$skill/SKILL.md"
@@ -54,11 +54,13 @@ bold "Next steps"
 dim   "  1. Add @cortex.md to your CLAUDE.md so it loads globally:"
 echo  "       echo '@cortex.md' >> $CLAUDE_DIR/CLAUDE.md"
 echo
-dim   "  2. (Optional) Wire the SessionStart hook for weekly self-audits:"
-dim   "     See the README → 'Optional: SessionStart hook' section."
+dim   "  2. Build your registry automatically from what you already run:"
+echo  "       run  /cortex-init   in your agent"
+echo  "       (or  python3 $BIN_DIR/cortex init   to just see the scan)"
+dim   "     It discovers your agents, skills, MCPs and CLIs and writes them into"
+dim   "     the Workflow Registry — never overwriting your setup without a backup."
 echo
-dim   "  3. Edit $CORTEX_MD — populate the Workflow Registry with YOUR systems."
-dim   "     The starter is a skeleton; the value is in your own routes."
+dim   "  3. (Optional) Wire the SessionStart hook for weekly self-audits — see the README."
 echo
 dim   "  4. Try it:"
 echo  "       python3 $BIN_DIR/cortex doctor"

@@ -85,6 +85,8 @@ The second thing it does is remember. Every route is logged with its reasoning a
 
 ## Install
 
+<p align="center"><img src="assets/cortex-setup.svg" alt="Cortex setup flow: clone, install, discover your systems, interview, your registry, route" width="880"></p>
+
 Requires [Claude Code](https://claude.com/claude-code) with a `~/.claude/` directory. Python 3 for the CLI. Tested on macOS and Linux.
 
 Using a different agent — Cursor, Codex, Gemini CLI, Aider, Windsurf? Cortex works there too; see [Using Cortex with other agents](#using-cortex-with-other-agents).
@@ -95,11 +97,13 @@ cd cortex
 ./install.sh
 ```
 
-Then load it in every session by adding it to your global instructions:
+Then load it globally, and let it adopt your existing stack:
 
 ```bash
-echo '@cortex.md' >> ~/.claude/CLAUDE.md
+echo '@cortex.md' >> ~/.claude/CLAUDE.md   # load Cortex every session
 ```
+
+Now run **`/cortex-init`** in your agent. It scans what you already run — your agents, skills, MCP servers, CLIs, and other-agent config files — interviews you on anything ambiguous, and writes it all into your Workflow Registry. It **never** overwrites your `cortex.md` without a backup and your confirmation. (Just want the raw scan? `python3 ~/.claude/bin/cortex init`.)
 
 Verify:
 
@@ -113,7 +117,7 @@ The installer copies:
 | From | To | What it is |
 |---|---|---|
 | `bin/cortex` | `~/.claude/bin/cortex` | The routing log, learning, and audit CLI |
-| `skills/cortex-log`, `cortex-learn`, `cortex-reroute` | `~/.claude/skills/` | Slash commands inside Claude Code |
+| `skills/cortex-log`, `cortex-learn`, `cortex-reroute`, `cortex-init` | `~/.claude/skills/` | Slash commands, including `/cortex-init` discovery |
 | `templates/cortex.md` | `~/.claude/cortex.md` | The framework itself — only if you don't already have one |
 
 It does **not** touch `~/.claude/settings.json`. The SessionStart hook is opt-in; see [below](#optional-sessionstart-hook).
@@ -418,7 +422,9 @@ Cortex is only as good as the registry underneath it. Mine is below — not beca
 
 The shipped `templates/cortex.md` is a **framework, not a config.** Its Workflow Registry is deliberately stubbed — `Your Phase-Based PM System`, `Your PR / Code Review System`, and so on — with only OMC filled in as a worked example.
 
-You populate it with what you actually run. For each system, document:
+**The fast way — `/cortex-init`.** Run it and Cortex discovers what you already run (agents, skills, MCP servers, CLIs, other-agent configs), interviews you on the ambiguous parts, and writes the registry for you. It **adopts** your stack; it never imposes one, and never overwrites your `cortex.md` without a backup. This is the recommended path.
+
+**By hand.** You can also populate it yourself. For each system, document:
 
 1. **Name** and whether it's installed
 2. **Strengths** — one line
@@ -474,19 +480,21 @@ cortex/
 ├── install.sh           ← copies files into ~/.claude/
 ├── bin/
 │   └── cortex           ← the CLI: log, log-line, show, hint, outcome,
-│                          learn, reroute, audit-tiers, doctor
+│                          learn, reroute, audit-tiers, doctor, init
 ├── skills/
 │   ├── cortex-log/      ← /cortex-log
 │   ├── cortex-learn/    ← /cortex-learn
-│   └── cortex-reroute/  ← /cortex-reroute
+│   ├── cortex-reroute/  ← /cortex-reroute
+│   └── cortex-init/     ← /cortex-init (discover & adopt your stack)
 ├── templates/
 │   └── cortex.md        ← the framework, registry stubbed
 │                          installed to ~/.claude/cortex.md
 ├── examples/
 │   └── cortex.md        ← a populated registry, for reference
 └── assets/
-    ├── cortex-flowchart.html     ← architecture diagram
-    └── cortex-vs-council.html    ← LLM Council vs Cortex, side by side
+    ├── cortex-setup.svg          ← the setup flow (shown above)
+    ├── *.svg                     ← logo, hero + workflow charts
+    └── *.html                    ← standalone flowchart & comparison diagrams
 ```
 
 ---
