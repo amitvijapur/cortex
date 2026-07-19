@@ -118,6 +118,21 @@
 | `product-management` | PRDs, roadmaps, prioritisation (install on demand) |
 | `bio-research` | PubMed / genomics / BioRender (install on demand) |
 
+### Claude Tag Plugins (SaaS Connectors)
+**Installed:** Pending — `claude plugin marketplace add anthropics/claude-tag-plugins`, then install services on demand
+**Strengths:** 18 first-party SaaS connector plugins, one per service; credentials injected by the runtime, not embedded
+**Best for:** Giving the agent direct, routable access to issue trackers, CRM, data warehouses, and observability
+
+| Plugin | Use When |
+|--------|----------|
+| `jira` / `linear` / `asana` | Issue and project tracking |
+| `salesforce` / `hubspot` | CRM — accounts, contacts, deals, pipeline |
+| `datadog` / `grafana` / `pagerduty` / `sentry` | Observability and incident (pairs with SRE / Incident Responder agents) |
+| `bigquery` / `snowflake` / `redshift` | Cloud data warehouse SQL (pairs with the `data` plugin) |
+| `confluence` / `notion` / `google-drive` | Docs and knowledge base (dedupe against Cloud MCPs) |
+
+**Effort tier default:** L1 to install or query; the task using it sets the real tier.
+
 ### Anthropic Official Skills
 **Installed:** Yes
 **Strengths:** First-party document creation / editing skills
@@ -304,6 +319,18 @@
 | DuckDB | In-process OLAP — SQL over local Parquet / CSV / JSON | Backtest output analysis, ad-hoc tabular exploration |
 | cortex-queue | Human-in-the-loop decision queue — `enqueue_decision()` / `await_decision()` / `ask_human()` | Long-running unsupervised loops that hit ambiguity |
 | Slack | Send/read messages, manage channels | Team communication, notifications |
+
+### Toolport (Local MCP Gateway)
+**Installed:** Pending — `brew install --cask tsouth89/toolport/toolport` (or the install script)
+**Strengths:** Local-first MCP gateway with lazy tool discovery — advertises four compact meta-tools instead of every server's full catalog
+**Best for:** Cutting the per-session token cost of a large MCP surface; one shared server config across clients
+
+| Pattern | Use When |
+|---------|----------|
+| Route MCP servers through the gateway | Many servers are registered and full catalogs bloat context every request |
+| `toolport_search_tools "<query>"` | The agent should discover the right tool on demand rather than loading all upfront |
+
+**Effort tier default:** L1 to install / query; L2 to re-wire the session's MCP config through it.
 
 ### Cloud MCPs (claude.ai connected)
 **Installed:** Yes

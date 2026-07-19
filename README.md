@@ -393,6 +393,7 @@ Cortex is only as good as the registry underneath it. Mine is below — not beca
 | [Agency Agents](https://github.com/msitarzewski/agency-agents) | 230+ domain specialists across 18 divisions — engineering, security, design, finance, GIS, marketing, and more. The specialist pool the router fans out across, and where `Specialise` picks a driver (or several). |
 | [anthropics/skills](https://github.com/anthropics/skills) | First-party document skills: `docx`, `pdf`, `pptx`, `xlsx`, plus `mcp-builder` and `skill-creator`. |
 | [knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins) | Anthropic's non-code plugins — data, legal, enterprise search, PM, marketing. |
+| [claude-tag-plugins](https://github.com/anthropics/claude-tag-plugins) | Anthropic's SaaS connector plugins — Jira, Linear, Salesforce, HubSpot, Datadog, and more. One plugin per service. |
 | [financial-services](https://github.com/anthropics/financial-services) | DCF, LBO, comps, earnings analysis, pitch decks — with live Excel and PowerPoint integration. |
 | [Tessl](https://tessl.io/) | Framework-specific skills — Next.js, React, Stripe, Three.js, modern Python. |
 | [obsidian-skills](https://github.com/kepano/obsidian-skills) | Vault operations via the Obsidian CLI. Where build logs get written. |
@@ -413,6 +414,7 @@ Cortex is only as good as the registry underneath it. Mine is below — not beca
 | [Morph](https://www.morphllm.com/) | Fast Apply edits and semantic code search. |
 | [DuckDB MCP](https://github.com/motherduckdb/mcp-server-motherduck) | In-process OLAP — SQL straight over local Parquet, CSV, and JSON. |
 | [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) | Lighthouse, a11y audits, network debugging, screenshots. Visual QA. |
+| [Toolport](https://github.com/tsouth89/toolport) | Local MCP gateway with lazy tool discovery — advertises compact meta-tools instead of dumping every server's full catalog into context. |
 
 > **A note on GSD.** The original `gsd-build/get-shit-done` repo was archived in June 2026. Development continues at [`open-gsd/gsd-core`](https://github.com/open-gsd/gsd-core), a community fork, which is what current plugin releases treat as upstream. That is the link above. Check it out yourself before adopting it.
 
