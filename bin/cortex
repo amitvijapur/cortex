@@ -12,6 +12,8 @@ Subcommands:
   audit-tiers  list L3/L4 routes so you can check whether L2 would have sufficed
   doctor       audit cortex setup for drift between docs, skills, and log
   init         discover your existing systems to prepare a personalized registry
+  intake       inbox for skills/workflows captured for review (see cortex-intake)
+  installs     pending-installs queue: setup commands surfaced by builds
 """
 import argparse
 import hashlib
@@ -47,6 +49,32 @@ PATTERN_THRESHOLD = 3
 WEEKLY_GATE_DAYS = 7
 EXPECTED_SKILLS = ["cortex-log", "cortex-learn", "cortex-reroute"]
 OUTCOME_STATES = ["shipped", "abandoned", "partial", "corrected"]
+
+# Workflow systems the log's `system` field is expected to use. doctor warns on
+# any that are registered but never routed to. Override with a comma-separated
+# CORTEX_SYSTEMS when your registry differs from the shipped template.
+REGISTERED_SYSTEMS = [
+    s.strip() for s in os.environ.get(
+        "CORTEX_SYSTEMS",
+        "OMC,GSD,ECC,Adversarial-Spec,Direct,Graphify,Domain-Models",
+    ).split(",") if s.strip()
+]
+
+# Proposal statuses that count as decided — `learn` won't re-surface these.
+PROPOSAL_ACTIONED_STATUSES = {"approved", "rejected", "superseded"}
+
+# Intake inbox — items captured for review (populated by the cortex-intake bot
+# or by `cortex intake add`).
+INBOX_PATH = CLAUDE_DIR / "cortex-inbox.jsonl"
+INBOX_STATES = ["pending", "reviewing", "reviewed", "building",
+                "integrated", "rejected", "failed", "answered"]
+INBOX_DONE = {"integrated", "rejected", "answered"}
+INBOX_FILTERS = INBOX_STATES + ["unresolved"]
+
+# Pending-installs queue — setup commands authored during a build, run later.
+INSTALL_QUEUE_PATH = CLAUDE_DIR / "cortex-install-queue.jsonl"
+INSTALL_STATES = ["pending", "done", "skipped"]
+INSTALL_FILTERS = INSTALL_STATES + ["all"]
 
 
 def now_iso():
@@ -329,6 +357,37 @@ Dominant tier: **{dominant_tier}** ({tier_count}/{count}).
     return path, True
 
 
+def actioned_tuples():
+    """Return the set of (class, system, pattern) tuples that already have a
+    non-pending proposal on disk, so `learn` doesn't re-surface a pattern that
+    has already been approved, rejected, or superseded."""
+    actioned = set()
+    if not PROPOSALS_DIR.exists():
+        return actioned
+    for path in PROPOSALS_DIR.glob("*.md"):
+        try:
+            text = path.read_text()
+        except OSError:
+            continue
+        # naive frontmatter parse: grab the top YAML block's key:value lines
+        if not text.startswith("---"):
+            continue
+        end = text.find("\n---", 3)
+        if end < 0:
+            continue
+        meta = {}
+        for line in text[3:end].splitlines():
+            if ":" in line:
+                k, _, v = line.partition(":")
+                meta[k.strip()] = v.strip()
+        if meta.get("status", "").lower() not in PROPOSAL_ACTIONED_STATUSES:
+            continue
+        key = (meta.get("class"), meta.get("system"), meta.get("pattern"))
+        if all(key):
+            actioned.add(key)
+    return actioned
+
+
 def cmd_learn(args):
     entries = read_log()
     active = [e for e in entries if e.get("outcome") != "corrected"]
@@ -340,7 +399,16 @@ def cmd_learn(args):
             continue
         groups[key].append(e)
 
-    candidates = [(key, grp) for key, grp in groups.items() if len(grp) >= args.threshold]
+    already_actioned = set() if args.include_actioned else actioned_tuples()
+    skipped = []
+    candidates = []
+    for key, grp in groups.items():
+        if len(grp) < args.threshold:
+            continue
+        if key in already_actioned:
+            skipped.append((key, len(grp)))
+            continue
+        candidates.append((key, grp))
     candidates.sort(key=lambda x: -len(x[1]))
 
     if args.check:
@@ -351,6 +419,11 @@ def cmd_learn(args):
 
     total = len(entries)
     if not candidates:
+        if skipped:
+            print(f"no new patterns (threshold: ≥{args.threshold}, total routes logged: {total})")
+            print(f"{len(skipped)} pattern(s) already actioned via prior proposals — "
+                  f"pass --include-actioned to see them")
+            return
         print(f"no patterns yet (threshold: ≥{args.threshold}, total routes logged: {total})")
         if total > 0:
             need = args.threshold - max((len(g) for g in groups.values()), default=0)
@@ -623,13 +696,32 @@ def cmd_doctor(args):
     else:
         issues["warn"].append(f"cortex.md missing — copy templates/cortex.md to {CORTEX_MD}")
 
-    # Check 4 — proposals folder (informational only)
+    # Check 4 — Obsidian surface, only when one is configured. Broken symlinks
+    # here mean the vault view silently stops tracking the real files.
+    if OBSIDIAN_ROOT:
+        for name, target in [("cortex.md", CORTEX_MD), ("cortex-log.jsonl", LOG_PATH)]:
+            link = OBSIDIAN_ROOT / name
+            if link.is_symlink():
+                try:
+                    if link.resolve() == target.resolve():
+                        issues["pass"].append(f"obsidian symlink ok: {name}")
+                    else:
+                        issues["warn"].append(
+                            f"obsidian symlink {name} points to the wrong target: {link.resolve()}")
+                except OSError:
+                    issues["warn"].append(f"obsidian symlink {name} is broken")
+            elif link.exists():
+                issues["warn"].append(f"obsidian {name} exists but is not a symlink to {target}")
+            else:
+                issues["warn"].append(f"obsidian {name} missing — the vault surface won't show it")
+
+    # Check 5 — proposals folder (informational only)
     if PROPOSALS_DIR.exists():
         issues["pass"].append(f"proposals folder exists: {PROPOSALS_DIR}")
     else:
         issues["pass"].append("proposals folder will be created on first /cortex-learn run")
 
-    # Check 5 — log entries hygiene
+    # Check 6 — log entries hygiene
     entries = read_log()
     total = len(entries)
     bad = [e for e in entries if not e.get("class") or not e.get("system") or not e.get("pattern") or not e.get("tier")]
@@ -638,7 +730,18 @@ def cmd_doctor(args):
     elif entries:
         issues["pass"].append("all log entries have required fields")
 
-    # Check 6 — phase progression
+    # Check 7 — registry drift: a system registered in cortex.md but never
+    # routed to is either dead weight in the registry or a blind spot.
+    if entries:
+        used_systems = Counter(e.get("system") for e in entries)
+        for sys_ in REGISTERED_SYSTEMS:
+            if sys_ in used_systems:
+                issues["pass"].append(f"system used: {sys_} ({used_systems[sys_]}× in log)")
+            else:
+                issues["warn"].append(
+                    f"system never used: {sys_} — registered in cortex.md but no log entries")
+
+    # Check 8 — phase progression
     if total < 20:
         issues["pass"].append(f"Phase 1 (visibility) — {total} routes logged")
     elif total < 200:
@@ -646,7 +749,7 @@ def cmd_doctor(args):
     else:
         issues["pass"].append(f"Phase 3 (similarity bias mature) — {total} routes logged")
 
-    # Check 7 — outcome coverage: `hint` weights past routes by outcome, so an
+    # Check 9 — outcome coverage: `hint` weights past routes by outcome, so an
     # unmarked log gives every route the same flat weight and the hints go blind.
     if entries:
         marked = sum(1 for e in entries if e.get("outcome"))
@@ -696,6 +799,226 @@ def cmd_doctor(args):
     if not issues["fail"] and not issues["warn"]:
         print("all green")
     return 1 if n_fail else 0
+
+
+# ---------- intake inbox + pending-installs queue ----------
+def read_inbox():
+    if not INBOX_PATH.exists():
+        return []
+    entries = []
+    for line in INBOX_PATH.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return entries
+
+
+def write_inbox(entries):
+    INBOX_PATH.write_text("".join(json.dumps(e) + "\n" for e in entries))
+
+
+def _inbox_id():
+    seed = f"{datetime.now(timezone.utc).isoformat()}{os.getpid()}{os.urandom(4).hex()}"
+    return "in_" + hashlib.sha1(seed.encode()).hexdigest()[:8]
+
+
+def cmd_intake(args):
+    action = args.action
+    entries = read_inbox()
+
+    if action == "add":
+        if not args.target:
+            print("usage: cortex intake add <url> [--note ...] [--source ...]", file=sys.stderr)
+            return 1
+        entry = {
+            "id": _inbox_id(),
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "url": args.target,
+            "note": args.note or "",
+            "source": args.source or "cli",
+            "from": None,
+            "status": "pending",
+            "verdict": None,
+            "resolved_ts": None,
+        }
+        entries.append(entry)
+        write_inbox(entries)
+        print(f"queued {entry['id']}  {entry['url']}")
+        return 0
+
+    def _match(entry, want):
+        if want == "unresolved":
+            return entry.get("status") not in INBOX_DONE
+        return entry.get("status") == want
+
+    if action == "count":
+        want = args.status or "pending"
+        print(sum(1 for e in entries if _match(e, want)))
+        return 0
+
+    if action == "list":
+        rows = [e for e in entries if _match(e, args.status or "pending")]
+        if args.json:
+            print(json.dumps(rows, indent=2))
+            return 0
+        if not rows:
+            label = args.status or "pending"
+            print(f"inbox has no {label} items")
+            return 0
+        for e in rows:
+            ts = (e.get("ts") or "")[:16].replace("T", " ")
+            note = f"  — {e['note']}" if e.get("note") else ""
+            target = e.get("url") or "(note only)"
+            print(f"{e.get('id', '?'):<12} [{e.get('status', '?'):<10}] {ts}  {target}{note}")
+        return 0
+
+    if action == "show":
+        if not args.target:
+            print("usage: cortex intake show <id>", file=sys.stderr)
+            return 1
+        for e in entries:
+            if e.get("id") == args.target:
+                print(json.dumps(e, indent=2))
+                return 0
+        print(f"no entry with id {args.target}", file=sys.stderr)
+        return 1
+
+    if action == "resolve":
+        if not args.target or not args.status or args.status == "unresolved":
+            print("usage: cortex intake resolve <id> --status "
+                  "<accepted|rejected|integrated> [--note ...]", file=sys.stderr)
+            return 1
+        for e in entries:
+            if e.get("id") == args.target:
+                e["status"] = args.status
+                if args.note:
+                    e["verdict"] = args.note
+                e["resolved_ts"] = datetime.now(timezone.utc).isoformat()
+                write_inbox(entries)
+                print(f"{e['id']} → {args.status}")
+                return 0
+        print(f"no entry with id {args.target}", file=sys.stderr)
+        return 1
+
+    print(f"unknown intake action: {action}", file=sys.stderr)
+    return 1
+
+
+# ── Install queue: setup commands surfaced by builds, run via "clear list" ───
+
+def read_installs():
+    if not INSTALL_QUEUE_PATH.exists():
+        return []
+    out = []
+    for line in INSTALL_QUEUE_PATH.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            out.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return out
+
+
+def write_installs(entries):
+    INSTALL_QUEUE_PATH.write_text("".join(json.dumps(e) + "\n" for e in entries))
+
+
+def cmd_installs(args):
+    action = args.action
+    entries = read_installs()
+
+    def _match(entry, want):
+        return True if want == "all" else entry.get("status") == want
+
+    if action == "add":
+        if not args.label or not args.command:
+            print("usage: cortex installs add --label L --command C [--command C2 ...] "
+                  "[--source ID] [--note N]", file=sys.stderr)
+            return 1
+        seed = f"{datetime.now(timezone.utc).isoformat()}{os.getpid()}{os.urandom(4).hex()}"
+        entry = {
+            "id": "iq_" + hashlib.sha1(seed.encode()).hexdigest()[:8],
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "source_id": args.source,
+            "label": args.label,
+            "commands": args.command,
+            "note": args.note or "",
+            "status": "pending",
+            "done_ts": None,
+        }
+        entries.append(entry)
+        write_installs(entries)
+        print(f"queued {entry['id']}  {entry['label']}  ({len(entry['commands'])} cmd)")
+        return 0
+
+    if action == "count":
+        print(sum(1 for e in entries if _match(e, args.status or "pending")))
+        return 0
+
+    if action == "list":
+        rows = [e for e in entries if _match(e, args.status or "pending")]
+        if args.labels:
+            print("; ".join(e.get("label", e.get("id", "?")) for e in rows))
+            return 0
+        if args.json:
+            print(json.dumps(rows, indent=2))
+            return 0
+        if not rows:
+            print(f"no {args.status or 'pending'} installs")
+            return 0
+        for e in rows:
+            print(f"{e.get('id', '?')}  [{e.get('status', '?')}]  {e.get('label', '')}")
+            for cmd in e.get("commands", []):
+                print(f"    $ {cmd}")
+            if e.get("note"):
+                print(f"    note: {e['note']}")
+        return 0
+
+    if action == "show":
+        if not args.target:
+            print("usage: cortex installs show <id>", file=sys.stderr)
+            return 1
+        for e in entries:
+            if e.get("id") == args.target:
+                print(json.dumps(e, indent=2))
+                return 0
+        print(f"no install {args.target}", file=sys.stderr)
+        return 1
+
+    if action in ("done", "skip"):
+        if not args.target:
+            print(f"usage: cortex installs {action} <id>", file=sys.stderr)
+            return 1
+        new = "done" if action == "done" else "skipped"
+        for e in entries:
+            if e.get("id") == args.target:
+                e["status"] = new
+                e["done_ts"] = datetime.now(timezone.utc).isoformat()
+                write_installs(entries)
+                print(f"{e['id']} → {new}")
+                return 0
+        print(f"no install {args.target}", file=sys.stderr)
+        return 1
+
+    if action == "clear":
+        n = 0
+        for e in entries:
+            if e.get("status") == "pending":
+                e["status"] = "done"
+                e["done_ts"] = datetime.now(timezone.utc).isoformat()
+                n += 1
+        write_installs(entries)
+        print(f"marked {n} pending install(s) done")
+        return 0
+
+    print(f"unknown installs action: {action}", file=sys.stderr)
+    return 1
 
 
 # ---------- init: discovery scan (M1) ----------
@@ -928,6 +1251,8 @@ def build_parser():
     ln.add_argument("--check", action="store_true", help="terse one-line output for session start")
     ln.add_argument("--no-proposals", action="store_true",
                     help="skip writing proposal markdown files")
+    ln.add_argument("--include-actioned", action="store_true",
+                    help="don't dedup against proposals already marked approved/rejected/superseded")
     ln.set_defaults(func=cmd_learn)
 
     rr = sub.add_parser("reroute", help="mark last entry as corrected")
@@ -973,6 +1298,32 @@ def build_parser():
     ini.add_argument("--out", help="where to write the inventory JSON (default: <state-dir>/cortex-inventory.json)")
     ini.add_argument("--dry-run", action="store_true", help="print the summary without writing the inventory file")
     ini.set_defaults(func=cmd_init)
+
+    it = sub.add_parser("intake",
+                        help="inbox for skills/workflows captured for review and triage")
+    it.add_argument("action", choices=["list", "count", "show", "resolve", "add"])
+    it.add_argument("target", nargs="?", help="entry id (show/resolve) or url (add)")
+    it.add_argument("--status", choices=INBOX_FILTERS,
+                    help="list/count: filter by status or 'unresolved' (default pending); "
+                         "resolve: the new status")
+    it.add_argument("--note", default=None, help="add: your note; resolve: the verdict text")
+    it.add_argument("--source", default="cli", help="add: capture source label (default cli)")
+    it.add_argument("--json", action="store_true", help="machine-readable output (list)")
+    it.set_defaults(func=cmd_intake)
+
+    inst = sub.add_parser("installs",
+                          help="pending-installs queue: setup commands surfaced by builds")
+    inst.add_argument("action", choices=["list", "count", "show", "add", "done", "skip", "clear"])
+    inst.add_argument("target", nargs="?", help="install id (show/done/skip)")
+    inst.add_argument("--status", choices=INSTALL_FILTERS,
+                      help="list/count: filter by status or 'all' (default pending)")
+    inst.add_argument("--label", help="add: human-readable label")
+    inst.add_argument("--command", action="append", help="add: a shell command (repeatable)")
+    inst.add_argument("--source", help="add: originating inbox id")
+    inst.add_argument("--note", help="add: caveat or note")
+    inst.add_argument("--labels", action="store_true", help="list: print labels only, one line")
+    inst.add_argument("--json", action="store_true", help="list: machine-readable output")
+    inst.set_defaults(func=cmd_installs)
 
     return p
 
