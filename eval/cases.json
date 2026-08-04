@@ -1,0 +1,127 @@
+{
+  "_comment": [
+    "Routing consistency cases for the Cortex eval harness.",
+    "",
+    "SCOPE: these tests establish INTERNAL CONSISTENCY — whether the routing protocol",
+    "still produces the behaviour its own document specifies. They do NOT measure routing",
+    "QUALITY. Nothing here can tell you a route was a good idea, only that the system is",
+    "still doing what cortex.md says it does.",
+    "",
+    "Case kinds:",
+    "  canary   — the expected answer is written in cortex.md and visible to the model.",
+    "             This is a recall check, not a generalisation test. It detects document",
+    "             corruption, context truncation, or a protocol that stopped loading.",
+    "  rule     — a RULE from cortex.md applied to a task the document has never seen.",
+    "             This is a genuine generalisation test; the answer is not in context.",
+    "  paired   — two variants of one task. The assertion is directional, comparing the",
+    "             transformed variant against its own base rather than an absolute value.",
+    "  shape    — tests the Domain-breadth heuristic, which selects fan-out vs single lane."
+  ],
+
+  "cases": [
+    {
+      "id": "canary-rename",
+      "kind": "canary",
+      "task": "rename this variable across the file",
+      "assert": [{"type": "tier_equals", "value": "L1"}],
+      "note": "cortex.md worked example. Answer visible in context."
+    },
+    {
+      "id": "canary-auth-refactor",
+      "kind": "canary",
+      "task": "refactor the auth middleware to use the new session store",
+      "assert": [
+        {"type": "tier_equals", "value": "L3"},
+        {"type": "pattern_contains", "value": "ralplan"}
+      ],
+      "note": "cortex.md worked example. Answer visible in context."
+    },
+    {
+      "id": "canary-audit-fanout",
+      "kind": "canary",
+      "task": "audit this feature for security and performance",
+      "assert": [{"type": "fanout", "value": true}],
+      "note": "cortex.md worked example. Answer visible in context."
+    },
+
+    {
+      "id": "rule-default-tier",
+      "kind": "rule",
+      "task": "add a tooltip to the export button explaining the CSV format",
+      "assert": [{"type": "tier_equals", "value": "L2"}],
+      "note": "cortex.md: 'Default tier is L2.' Small reversible single-domain edit."
+    },
+    {
+      "id": "rule-override-light",
+      "kind": "rule",
+      "task": "go light — restructure the notification preferences screen",
+      "assert": [{"type": "tier_equals", "value": "L1"}],
+      "note": "Override phrase 'go light' forces L1 regardless of task shape."
+    },
+    {
+      "id": "rule-override-perfect",
+      "kind": "rule",
+      "task": "must be perfect — rotate the signing keys used by the mobile clients",
+      "assert": [{"type": "tier_equals", "value": "L4"}],
+      "note": "Override phrase 'must be perfect' forces L4."
+    },
+    {
+      "id": "rule-anti-inflation",
+      "kind": "rule",
+      "task": "fix the wording on the public pricing page",
+      "assert": [{"type": "tier_max", "value": "L2"}],
+      "note": "Anti-inflation rule: customer-facing ALONE is not L3. Reversible, no money moved."
+    },
+
+    {
+      "id": "paired-bump-base",
+      "kind": "paired",
+      "task": "add a keyboard shortcut for saving a draft",
+      "assert": [],
+      "note": "Base for paired-bump-plus1. No assertion; supplies the reference tier."
+    },
+    {
+      "id": "paired-bump-plus1",
+      "kind": "paired",
+      "task": "bump it — add a keyboard shortcut for saving a draft",
+      "assert": [{"type": "tier_offset", "base": "paired-bump-base", "offset": 1}],
+      "note": "Override phrase 'bump it' raises exactly one tier above the untransformed base."
+    },
+    {
+      "id": "paired-reversible-local",
+      "kind": "paired",
+      "task": "delete the local scratch directory used by the test runner",
+      "assert": [],
+      "note": "Base for paired-irreversible-prod. Reversible, local."
+    },
+    {
+      "id": "paired-irreversible-prod",
+      "kind": "paired",
+      "task": "drop the production orders table and rebuild it from the archive",
+      "assert": [{"type": "tier_gt", "base": "paired-reversible-local"}],
+      "note": "Reversibility heuristic: cannot undo without manual recovery, so bump a tier."
+    },
+
+    {
+      "id": "shape-single-domain",
+      "kind": "shape",
+      "task": "add cursor-based pagination to the users list endpoint",
+      "assert": [{"type": "fanout", "value": false}],
+      "note": "One domain (backend). Domain-breadth heuristic should NOT fire."
+    },
+    {
+      "id": "shape-two-domains",
+      "kind": "shape",
+      "task": "add cursor-based pagination to the users list endpoint and redesign the list screen to use it",
+      "assert": [{"type": "fanout", "value": true}],
+      "note": "Two independent domains (backend, frontend). Breadth heuristic should fire."
+    },
+    {
+      "id": "shape-three-domains",
+      "kind": "shape",
+      "task": "build a signup flow covering the API, transactional email delivery, and an accessibility review",
+      "assert": [{"type": "fanout", "value": true}],
+      "note": "Three independent domains. Fan-out plus a reconciler expected."
+    }
+  ]
+}
