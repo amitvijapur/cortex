@@ -1,0 +1,1007 @@
+#!/usr/bin/env python3
+"""cortex-ui — local live mission-control dashboard for Cortex, Amit's Claude Code
+workflow-routing layer.
+
+Serves a self-contained, dependency-free web dashboard that reads (never writes)
+three JSONL files:
+
+  ~/.claude/cortex-log.jsonl          routing decisions
+  ~/.claude/cortex-inbox.jsonl        Telegram intake pipeline
+  ~/.claude/cortex-install-queue.jsonl pending / done installs
+
+Python 3 stdlib only. Binds 127.0.0.1. Read-only over the data files.
+
+Usage:
+    cortex-ui [--port 7777] [--no-open]
+"""
+
+import argparse
+import hashlib
+import json
+import webbrowser
+from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlparse
+
+# --------------------------------------------------------------------------- #
+# Data sources (read-only)
+# --------------------------------------------------------------------------- #
+HOME = Path.home()
+LOG_PATH = HOME / ".claude" / "cortex-log.jsonl"
+INBOX_PATH = HOME / ".claude" / "cortex-inbox.jsonl"
+INSTALLS_PATH = HOME / ".claude" / "cortex-install-queue.jsonl"
+
+
+def load_jsonl(path):
+    """Parse a JSONL file defensively.
+
+    Returns (records, malformed_count, mtime_iso). Missing file -> ([], 0, None).
+    Skips blank lines and any line that isn't a JSON object.
+    """
+    records = []
+    malformed = 0
+    mtime = None
+    try:
+        st = path.stat()
+        mtime = datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat()
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        return [], 0, None
+    except OSError:
+        return [], 0, None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            malformed += 1
+            continue
+        if isinstance(obj, dict):
+            records.append(obj)
+        else:
+            malformed += 1
+    return records, malformed, mtime
+
+
+def parse_ts(value):
+    """Parse an ISO-ish timestamp string into a datetime, or None."""
+    if not isinstance(value, str):
+        return None
+    s = value.strip()
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(s)
+    except ValueError:
+        return None
+
+
+def route_sort_key(r):
+    """Newest-first sort key (used with reverse=True). Undated rows sink last."""
+    dt = parse_ts(r.get("ts"))
+    if dt is None:
+        return (0, 0.0)
+    return (1, dt.timestamp())
+
+
+def short_url(url):
+    """Reduce a URL to host+path for a compact card title."""
+    if not url:
+        return ""
+    try:
+        p = urlparse(url)
+        host = (p.netloc or "").replace("www.", "")
+        path = p.path if p.path and p.path != "/" else ""
+        return (host + path) or url
+    except ValueError:
+        return url
+
+
+def norm_inbox(r):
+    """Normalise a messy inbox row into a stable shape for the frontend.
+
+    Handles verdict as: dict, plain string ("skip: ..."), error dict, or null;
+    and verdict.summary as either a string or a list of strings; plus the
+    'answered' rows which carry an `answer` dict instead of a verdict.
+    """
+    url = r.get("url") or ""
+    verdict = r.get("verdict")
+    rec = title = kind = summary = slots = None
+
+    if isinstance(verdict, dict):
+        if verdict.get("error"):
+            summary = "Error: " + str(verdict.get("error"))
+        else:
+            rec = verdict.get("recommendation")
+            title = verdict.get("title")
+            kind = verdict.get("kind")
+            slots = verdict.get("slots_into")
+            s = verdict.get("summary")
+            if isinstance(s, list):
+                summary = "\n".join(str(x) for x in s)
+            elif isinstance(s, str):
+                summary = s
+    elif isinstance(verdict, str):
+        summary = verdict
+        head = verdict.split(":", 1)[0].strip().lower()
+        if head in ("skip", "add", "maybe", "trial"):
+            rec = head
+
+    # 'answered' freeform rows keep their reply under `answer`.
+    ans = r.get("answer")
+    if summary is None and isinstance(ans, dict):
+        summary = ans.get("answer")
+        kind = kind or "freeform answer"
+
+    if isinstance(rec, str):
+        rec = rec.strip().lower()
+
+    if not title:
+        note = str(r.get("note") or "").strip()
+        title = short_url(url) if url else (note[:70] or "Freeform message")
+
+    return {
+        "id": r.get("id"),
+        "ts": r.get("ts"),
+        "url": url,
+        "status": (r.get("status") or "").lower(),
+        "note": r.get("note") or "",
+        "recommendation": rec,
+        "title": title,
+        "kind": kind or "",
+        "summary": summary or "",
+        "slots_into": slots or "",
+    }
+
+
+def norm_install(r):
+    """Normalise an install-queue row. `status` is pending|done."""
+    cmds = r.get("commands")
+    if not isinstance(cmds, list):
+        cmds = [str(cmds)] if cmds else []
+    return {
+        "id": r.get("id"),
+        "ts": r.get("ts"),
+        "source_id": r.get("source_id"),
+        "label": r.get("label") or "(unlabelled)",
+        "note": r.get("note") or "",
+        "commands": [str(c) for c in cmds],
+        "status": (r.get("status") or "pending").lower(),
+        "done_ts": r.get("done_ts"),
+    }
+
+
+def build_payload():
+    """Read all three files fresh (so the API is live) and assemble the payload."""
+    routes_raw, r_bad, r_mtime = load_jsonl(LOG_PATH)
+    inbox_raw, i_bad, i_mtime = load_jsonl(INBOX_PATH)
+    inst_raw, n_bad, n_mtime = load_jsonl(INSTALLS_PATH)
+
+    routes = sorted(routes_raw, key=route_sort_key, reverse=True)
+    inbox = [norm_inbox(x) for x in inbox_raw]
+    installs = [norm_install(x) for x in inst_raw]
+
+    data = {"routes": routes, "inbox": inbox, "installs": installs}
+    # Content hash (excludes generated_at) so the frontend only re-renders on change.
+    h = hashlib.md5(
+        json.dumps(data, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+
+    now = datetime.now(timezone.utc)
+    meta = {
+        "generated_at": now.isoformat(),
+        "hash": h,
+        "file_mtimes": {"log": r_mtime, "inbox": i_mtime, "installs": n_mtime},
+        "counts": {
+            "routes": len(routes),
+            "inbox": len(inbox),
+            "installs": len(installs),
+            "malformed": {"log": r_bad, "inbox": i_bad, "installs": n_bad},
+        },
+    }
+    return {**data, "meta": meta}
+
+
+# --------------------------------------------------------------------------- #
+# Embedded frontend (raw string — served as-is, all data arrives via /api/data)
+# --------------------------------------------------------------------------- #
+HTML_PAGE = r'''<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cortex · Routing Observatory</title>
+<style>
+/* ============================================================
+   ReasonBlocks-style theme: engineering-brutalist trace-viewer
+   on paper. Sharp corners, hard shadows, mono headings, no glow.
+   ============================================================ */
+:root{
+  --paper:#fafafa;
+  --card:#fff;
+  --ink:#191919;
+  --ink-2:#222;
+  --sec:#444;
+  --sec-2:#555;
+  --muted:#9ca3af;
+  --muted-2:#aaa;
+  --line:#e5e5e5;       /* hairline internal rules */
+  --cardline:#ddd;      /* route/intake card borders */
+  --grid:rgba(0,0,0,0.04);
+  --green:#059669;  --green-bg:#f0fdf4;
+  --purple:#5b21b6;
+  --amber:#d97706;
+  --red:#c0392b;
+  --code-bg:#f5f5f5;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Monaco,Consolas,monospace;
+  --sans:"Geist Variable",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background-color:var(--paper);
+  background-image:
+    repeating-linear-gradient(0deg, var(--grid) 0 1px, transparent 1px 26px),
+    repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 26px);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:14px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+a{color:var(--purple);text-decoration:none}
+a:hover{text-decoration:underline}
+::selection{background:rgba(91,33,182,0.16)}
+.wrap{max-width:1200px;margin:0 auto;padding:0 22px}
+.mono{font-family:var(--mono)}
+
+/* ---------- header ---------- */
+header{
+  position:sticky;top:0;z-index:20;
+  background:var(--card);
+  border-bottom:2px solid var(--ink);
+}
+.head-in{display:flex;align-items:center;gap:20px;padding:14px 0;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.logomark{flex:none;display:block}
+.wordmark{font-family:var(--mono);font-weight:700;font-size:17px;letter-spacing:0.06em;color:var(--ink);text-transform:uppercase}
+.tagline{font-family:var(--mono);color:var(--muted);font-size:11px;letter-spacing:0.04em;border-left:1px solid var(--line);padding-left:12px;text-transform:uppercase}
+.live{display:flex;align-items:center;gap:9px;margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.livedot{
+  width:8px;height:8px;border-radius:50%;background:var(--green);
+  animation:pulse 1.8s ease-in-out infinite;
+}
+.livedot.stale{background:var(--amber);animation:none}
+.livedot.down{background:var(--red);animation:none}
+.live-label{font-weight:700;letter-spacing:0.16em;color:var(--ink);font-size:11px}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.3;transform:scale(0.8)}}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:6px;padding:0 0 12px;overflow-x:auto}
+.tab{
+  appearance:none;background:var(--card);border:1px solid var(--ink);
+  color:var(--ink);font-family:var(--mono);font-size:12px;font-weight:600;
+  padding:6px 13px;border-radius:2px;cursor:pointer;white-space:nowrap;
+  display:flex;align-items:center;gap:8px;transition:background .12s,color .12s;
+  text-transform:uppercase;letter-spacing:0.03em;
+}
+.tab:hover{background:#f0f0f0}
+.tab.active{background:var(--ink);color:#fff}
+.tab .tc{font-family:var(--mono);font-size:11px;color:var(--muted);background:#f0f0f0;padding:1px 6px;border-radius:2px}
+.tab.active .tc{color:#fff;background:rgba(255,255,255,0.18)}
+
+/* ---------- layout ---------- */
+main{padding:22px 0 60px}
+.panel{background:var(--card);border:1px solid var(--ink);border-radius:2px;padding:20px;margin-bottom:20px;box-shadow:4px 4px 0 rgba(0,0,0,0.08)}
+.panel-h{display:flex;align-items:baseline;gap:12px;margin:-2px 0 16px}
+.panel-h h2{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--ink);margin:0;letter-spacing:0.04em;text-transform:uppercase}
+.panel-sub{font-family:var(--mono);color:var(--muted);font-size:11px}
+
+/* ---------- stat strip ---------- */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.stat{background:var(--card);border:1px solid var(--ink);border-radius:2px;padding:16px 18px;box-shadow:4px 4px 0 rgba(0,0,0,0.08)}
+.stat .k{font-family:var(--mono);color:var(--muted);font-size:11px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600}
+.stat .v{font-family:var(--mono);color:var(--ink);font-size:32px;font-weight:700;line-height:1.05;margin-top:8px;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:16px;color:var(--sec);font-weight:700}
+.stat.s-ship .v{color:var(--green)}
+.stat .v.v-red{color:var(--red)}
+.stat .sub{font-family:var(--mono);color:var(--muted);font-size:10.5px;margin-top:4px}
+.tierbars{display:flex;flex-direction:column;gap:5px;margin-top:10px}
+.tierbar{display:grid;grid-template-columns:22px 1fr 22px;align-items:center;gap:8px;font-size:11px;font-family:var(--mono)}
+.tierbar .lab{color:var(--sec)}
+.tierbar .cnt{color:var(--muted);text-align:right}
+.tierbar .track{display:block;height:8px;background:#f0f0f0;border:1px solid var(--line);border-radius:0;overflow:hidden}
+.tierbar .fill{display:block;height:100%;border-radius:0}
+
+/* ---------- filters ---------- */
+.filters{display:flex;flex-direction:column;gap:9px;margin-bottom:18px}
+.fgroup{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.fgroup .glabel{font-family:var(--mono);color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:0.08em;width:64px;flex:none;font-weight:600}
+.pill{
+  appearance:none;background:var(--card);border:1px solid var(--cardline);
+  color:var(--sec);font-family:var(--mono);font-size:11.5px;padding:3px 10px;border-radius:2px;
+  cursor:pointer;transition:all .12s;
+}
+.pill:hover{color:var(--ink);border-color:var(--ink)}
+.pill.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+/* ---------- route feed ---------- */
+.feed{display:flex;flex-direction:column;gap:10px}
+.route-card{
+  background:var(--card);border:1px solid var(--cardline);border-radius:2px;
+  padding:14px 16px 14px 46px;cursor:pointer;transition:border-color .12s;position:relative;
+}
+.route-card:hover{border-color:var(--ink)}
+.route-card.open{border-color:var(--ink)}
+.rc-num{
+  position:absolute;left:0;top:0;bottom:0;width:34px;display:flex;align-items:flex-start;justify-content:center;
+  padding-top:15px;font-family:var(--mono);font-size:11px;color:var(--muted);
+  border-right:1px solid var(--line);background:#fbfbfb;
+}
+.rc-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.chipline{display:flex;align-items:center;gap:5px;flex-wrap:wrap;flex:1;min-width:0}
+.rc-meta{display:flex;align-items:center;gap:10px;margin-left:auto;flex:none}
+.rc-time{color:var(--muted);font-size:11px;font-family:var(--mono);white-space:nowrap}
+.rc-task{color:var(--ink-2);margin:11px 0 10px;font-size:13.5px}
+.rc-tags{display:flex;align-items:center;gap:7px}
+.rc-details{max-height:0;overflow:hidden;transition:max-height .25s ease;margin-top:0}
+.route-card.open .rc-details{max-height:640px;margin-top:13px}
+.drow{display:grid;grid-template-columns:140px 1fr;gap:12px;padding:7px 0;border-top:1px solid var(--line)}
+.drow .dk{font-family:var(--mono);color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;padding-top:1px}
+.drow .dv{color:var(--sec);font-size:12.5px}
+.dmeta{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.dmeta .mono{color:var(--muted);font-size:11px}
+.chev{position:absolute;right:14px;bottom:12px;color:var(--muted);font-size:11px;transition:transform .2s}
+.route-card.open .chev{transform:rotate(180deg)}
+
+/* ---------- chips ---------- */
+.chip{
+  font-family:var(--mono);font-size:11px;font-weight:600;padding:3px 8px;border-radius:2px;
+  border:1px solid var(--ink);background:var(--card);color:var(--ink);white-space:nowrap;
+}
+.chip-sys{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chip-pat{background:var(--card);color:var(--ink);border-color:var(--ink)}
+.chip-agent{background:var(--card);color:var(--ink-2);border-color:var(--cardline)}
+.chip-recon{background:var(--card);color:var(--green);border-color:var(--green)}
+.sep{color:var(--muted);font-size:12px;padding:0 1px;user-select:none}
+.glyph{color:var(--purple);font-family:var(--mono);font-size:12px;font-weight:700;padding:0 2px}
+.glyph.arrow{color:var(--green)}
+.tier{font-weight:700;letter-spacing:0.04em;color:#fff}
+.tier-L1{background:var(--green);border-color:var(--green)}
+.tier-L2{background:var(--ink);border-color:var(--ink)}
+.tier-L3{background:var(--purple);border-color:var(--purple)}
+.tier-L4{background:var(--red);border-color:var(--red)}
+
+/* ---------- confidence dots ---------- */
+.cdots{display:flex;gap:4px;align-items:center}
+.cdot{width:7px;height:7px;border-radius:50%;background:var(--muted);cursor:help}
+.cdot.c-high{background:var(--green)}
+.cdot.c-med{background:var(--muted)}
+.cdot.c-low{background:var(--red)}
+.cdot.c-none{background:transparent;border:1px solid var(--muted)}
+
+/* ---------- outcome badges (solid accents) ---------- */
+.ob{font-family:var(--mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:3px 8px;border-radius:2px;border:1px solid transparent;white-space:nowrap}
+.ob-shipped{color:#fff;background:var(--green);border-color:var(--green)}
+.ob-partial{color:var(--sec);background:var(--card);border-color:var(--cardline)}
+.ob-corrected{color:#fff;background:var(--amber);border-color:var(--amber)}
+.ob-abandoned{color:#fff;background:var(--red);border-color:var(--red)}
+.ob-pending{color:var(--sec);background:var(--card);border-color:var(--cardline);display:inline-flex;align-items:center;gap:5px}
+.ob-pending .pdot{width:6px;height:6px;border-radius:50%;background:var(--amber);animation:pulse 1.6s ease-in-out infinite}
+
+/* ---------- badges ---------- */
+.badge{font-family:var(--mono);font-size:10.5px;padding:2px 8px;border-radius:2px;border:1px solid var(--cardline);color:var(--sec);background:var(--card)}
+.b-proj{color:var(--ink);border-color:var(--ink)}
+.b-class{color:var(--sec);border-color:var(--cardline)}
+
+/* ---------- charts ---------- */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.chart{width:100%;height:auto;display:block}
+.c-label{fill:var(--muted);font-family:var(--mono);font-size:12px}
+.c-val{fill:var(--ink);font-family:var(--mono);font-size:12px;font-weight:700}
+.c-axis{fill:var(--muted);font-family:var(--mono);font-size:10px}
+.c-grid{stroke:var(--line);stroke-width:1}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px}
+.legend .li{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11.5px;color:var(--sec)}
+.legend .sw{width:11px;height:11px;border-radius:0;flex:none;border:1px solid rgba(0,0,0,0.15)}
+.legend .li b{color:var(--ink);font-family:var(--mono);font-weight:700}
+
+/* ---------- kanban ---------- */
+.kanban{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;align-items:start}
+.kcol{background:var(--card);border:1px solid var(--ink);border-radius:2px;padding:13px;min-width:0;box-shadow:4px 4px 0 rgba(0,0,0,0.08)}
+.kcol-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;padding:0 2px 9px;border-bottom:1px solid var(--line)}
+.kcol-h .t{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink);letter-spacing:0.04em;text-transform:uppercase}
+.kcol-h .n{font-family:var(--mono);font-size:11px;color:var(--muted);background:#f0f0f0;padding:1px 6px;border-radius:2px}
+.kcards{display:flex;flex-direction:column;gap:10px}
+.intake-card{background:var(--card);border:1px solid var(--cardline);border-radius:2px;padding:12px;cursor:pointer;transition:border-color .12s}
+.intake-card:hover{border-color:var(--ink)}
+.ic-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.ic-time{color:var(--muted);font-size:10.5px;font-family:var(--mono);white-space:nowrap}
+.ic-title{color:var(--ink);font-size:12.5px;font-weight:600;line-height:1.35;word-break:break-word}
+.ic-kind{font-family:var(--mono);color:var(--muted);font-size:10.5px;margin-top:4px;line-height:1.45}
+.ic-body{max-height:0;overflow:hidden;transition:max-height .25s ease}
+.intake-card.open .ic-body{max-height:1600px;margin-top:10px}
+.ic-summary{color:var(--sec);font-size:12px;line-height:1.55;white-space:pre-wrap;border-top:1px solid var(--line);padding-top:9px}
+.ic-link{display:inline-block;margin-top:9px;font-size:11px;font-family:var(--mono);word-break:break-all}
+.rec{font-family:var(--mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;padding:2px 7px;border-radius:2px;border:1px solid transparent}
+.rec-add{color:#fff;background:var(--green);border-color:var(--green)}
+.rec-skip{color:#fff;background:var(--red);border-color:var(--red)}
+.rec-trial{color:#fff;background:var(--purple);border-color:var(--purple)}
+.rec-maybe{color:#fff;background:var(--amber);border-color:var(--amber)}
+.rec-none{color:var(--muted);background:var(--card);border-color:var(--cardline)}
+
+/* ---------- installs ---------- */
+.inst-groups{display:flex;flex-direction:column;gap:20px}
+.install-card{background:var(--card);border:1px solid var(--cardline);border-radius:2px;padding:15px 16px;margin-bottom:12px}
+.inst-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px}
+.inst-label{font-family:var(--mono);color:var(--ink);font-weight:700;font-size:12.5px}
+.inst-time{color:var(--muted);font-size:11px;font-family:var(--mono);margin-left:auto}
+.status-done{color:#fff;background:var(--green);border-color:var(--green)}
+.status-pending{color:#fff;background:var(--amber);border-color:var(--amber)}
+.inst-note{color:var(--sec);font-size:12px;line-height:1.5;margin-bottom:10px}
+.codeblock{
+  background:var(--code-bg);border:1px solid var(--cardline);border-radius:2px;padding:11px 12px;margin:0;
+  font-family:var(--mono);font-size:12px;color:var(--ink-2);overflow-x:auto;white-space:pre;line-height:1.7;
+}
+
+/* ---------- empty / loading ---------- */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:52px 20px;gap:7px}
+.empty-mark{margin-bottom:10px;display:block}
+.empty-t{font-family:var(--mono);color:var(--ink);font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:0.04em}
+.empty-s{color:var(--muted);font-size:12.5px;max-width:390px;font-style:italic}
+
+/* ---------- responsive ---------- */
+@media(max-width:900px){
+  .stats{grid-template-columns:1fr 1fr}
+  .chart-grid{grid-template-columns:1fr}
+  .kanban{grid-template-columns:1fr 1fr}
+}
+@media(max-width:560px){
+  .stats{grid-template-columns:1fr}
+  .kanban{grid-template-columns:1fr}
+  .rc-meta{margin-left:0}
+  .tagline{display:none}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="head-in">
+      <div class="brand">
+        <svg class="logomark" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+          <rect x="0" y="0" width="7" height="7" fill="#191919"/>
+          <rect x="11" y="0" width="7" height="7" fill="#191919"/>
+          <rect x="0" y="11" width="7" height="7" fill="#191919"/>
+          <rect x="11" y="11" width="7" height="7" fill="#191919"/>
+        </svg>
+        <span class="wordmark">Cortex</span>
+        <span class="tagline">routing observatory</span>
+      </div>
+      <div class="live">
+        <span class="livedot" id="livedot"></span>
+        <span class="live-label">LIVE</span>
+        <span id="ago">connecting…</span>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab active" data-act="tab" data-view="routes">Routes <span class="tc" id="tc-routes">0</span></button>
+      <button class="tab" data-act="tab" data-view="analytics">Analytics</button>
+      <button class="tab" data-act="tab" data-view="intake">Intake <span class="tc" id="tc-intake">0</span></button>
+      <button class="tab" data-act="tab" data-view="installs">Installs <span class="tc" id="tc-installs">0</span></button>
+    </div>
+  </div>
+</header>
+<main><div class="wrap" id="main"></div></main>
+
+<script>
+"use strict";
+
+/* ======================= state ======================= */
+const state = {
+  data:null, hash:null, view:"routes", lastFetch:0,
+  filters:{class:null, tier:null, outcome:null, project:null},
+};
+const TIER_COLOR = {L1:"#059669", L2:"#191919", L3:"#5b21b6", L4:"#c0392b"};
+const OUT_COLOR  = {shipped:"#059669", partial:"#9ca3af", corrected:"#d97706", abandoned:"#c0392b", pending:"#cccccc"};
+
+/* ======================= helpers ======================= */
+function esc(s){
+  return String(s==null?"":s).replace(/[&<>"']/g, c=>(
+    {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function ago(iso){
+  if(!iso) return "";
+  const t = Date.parse(iso);
+  if(isNaN(t)) return "";
+  let s = Math.max(0,(Date.now()-t)/1000);
+  if(s<60) return Math.floor(s)+"s ago";
+  const m=s/60; if(m<60) return Math.floor(m)+"m ago";
+  const h=m/60; if(h<24) return Math.floor(h)+"h ago";
+  const d=h/24; if(d<30) return Math.floor(d)+"d ago";
+  const mo=d/30; if(mo<12) return Math.floor(mo)+"mo ago";
+  return Math.floor(d/365)+"y ago";
+}
+function hostPath(url){
+  try{ const u=new URL(url); return u.hostname.replace(/^www\./,"")+((u.pathname&&u.pathname!=="/")?u.pathname:""); }
+  catch(e){ return url; }
+}
+
+/* ======================= chips / route rendering ======================= */
+function agentChips(agent){
+  let recon=null, left=agent;
+  if(agent.indexOf("→")>=0){ const p=agent.split("→"); left=p[0]; recon=p.slice(1).join("→"); }
+  const paras = left.split("∥").map(s=>s.trim()).filter(Boolean);
+  let html = paras.map(p=>`<span class="chip chip-agent">${esc(p)}</span>`)
+                  .join('<span class="glyph">∥</span>');
+  if(recon){ html += `<span class="glyph arrow">→</span><span class="chip chip-recon">${esc(recon.trim())}</span>`; }
+  return html;
+}
+function chipChain(r){
+  const segs=[];
+  if(r.system)  segs.push(`<span class="chip chip-sys">${esc(r.system)}</span>`);
+  if(r.pattern) segs.push(`<span class="chip chip-pat">${esc(r.pattern)}</span>`);
+  if(r.agent)   segs.push(agentChips(r.agent));
+  const tier = r.tier ? String(r.tier).toUpperCase() : null;
+  if(tier) segs.push(`<span class="chip tier tier-${esc(tier)}">${esc(tier)}</span>`);
+  return segs.join('<span class="sep">›</span>');
+}
+function confDots(r){
+  const dims=[["Route",r.route_confidence],["Tier",r.tier_confidence],["Spec",r.spec_confidence]];
+  return '<span class="cdots">'+dims.map(([label,v])=>{
+    const val=(v||r.confidence||"").toLowerCase();
+    const cls = val==="high"?"c-high":val==="med"?"c-med":val==="low"?"c-low":"c-none";
+    return `<span class="cdot ${cls}" title="${label} confidence: ${esc(val||"n/a")}"></span>`;
+  }).join("")+"</span>";
+}
+function outcomeBadge(o){
+  if(!o) return '<span class="ob ob-pending"><span class="pdot"></span>pending</span>';
+  const map={shipped:["shipped","ob-shipped"],partial:["partial","ob-partial"],
+             corrected:["corrected","ob-corrected"],abandoned:["abandoned","ob-abandoned"]};
+  const m=map[o]||[o,"ob-partial"];
+  return `<span class="ob ${m[1]}">${esc(m[0])}</span>`;
+}
+function details(r){
+  const rows=[["Tier reasoning",r.tier_reason],["System reasoning",r.system_reason],
+              ["Outcome note",r.outcome_note],["Redirected from",r.redirect_from],
+              ["User correction",r.user_correction],["Tier audit",r.tier_audit_note]];
+  let html=rows.filter(x=>x[1]).map(x=>
+    `<div class="drow"><span class="dk">${x[0]}</span><span class="dv">${esc(x[1])}</span></div>`).join("");
+  html+=`<div class="dmeta"><span class="mono">session ${esc(r.session_id||"—")}</span>`
+      + `<span class="mono">#${esc(r.task_hash||"—")}</span></div>`;
+  return html;
+}
+function routeCard(r, idx){
+  return `<div class="route-card" data-act="toggle">
+    <span class="rc-num">${(idx||0)+1}</span>
+    <div class="rc-head">
+      <div class="chipline">${chipChain(r)}</div>
+      <div class="rc-meta">${confDots(r)}${outcomeBadge(r.outcome)}<span class="rc-time">${ago(r.ts)}</span></div>
+    </div>
+    <div class="rc-task">${esc(r.task||"—")}</div>
+    <div class="rc-tags">
+      <span class="badge b-proj">${esc(r.project||"—")}</span>
+      <span class="badge b-class">${esc(r.class||"—")}</span>
+    </div>
+    <div class="rc-details">${details(r)}</div>
+    <span class="chev">▾</span>
+  </div>`;
+}
+
+/* ======================= routes view ======================= */
+function passFilter(r,f){
+  if(f.class && r.class!==f.class) return false;
+  if(f.tier && String(r.tier).toUpperCase()!==f.tier) return false;
+  if(f.outcome){ if((r.outcome||"pending")!==f.outcome) return false; }
+  if(f.project && r.project!==f.project) return false;
+  return true;
+}
+function computeStats(R){
+  const st={total:R.length, shipped:0, resolved:0, corrections:0, tiers:{L1:0,L2:0,L3:0,L4:0}};
+  R.forEach(r=>{
+    const o=r.outcome;
+    if(o){ st.resolved++; if(o==="shipped") st.shipped++; }
+    if(o==="corrected" || r.redirect_from || r.user_correction) st.corrections++;
+    const t=String(r.tier||"").toUpperCase();
+    if(st.tiers[t]!==undefined) st.tiers[t]++;
+  });
+  return st;
+}
+function statStrip(st){
+  const pct = st.resolved ? Math.round(st.shipped/st.resolved*100) : 0;
+  const maxTier = Math.max(1, st.tiers.L1, st.tiers.L2, st.tiers.L3, st.tiers.L4);
+  const bars = ["L1","L2","L3","L4"].map(t=>{
+    const w=Math.round(st.tiers[t]/maxTier*100);
+    return `<div class="tierbar"><span class="lab">${t}</span>
+      <span class="track"><span class="fill" style="width:${w}%;background:${TIER_COLOR[t]}"></span></span>
+      <span class="cnt">${st.tiers[t]}</span></div>`;
+  }).join("");
+  return `<div class="stats">
+    <div class="stat"><div class="k">Total routes</div><div class="v">${st.total}</div>
+      <div class="sub">logged decisions</div></div>
+    <div class="stat s-ship"><div class="k">Shipped</div><div class="v">${pct}<small>%</small></div>
+      <div class="sub">${st.shipped} of ${st.resolved} resolved</div></div>
+    <div class="stat s-corr"><div class="k">Corrections</div><div class="v${st.corrections>0?" v-red":""}">${st.corrections}</div>
+      <div class="sub">reroutes &amp; corrected</div></div>
+    <div class="stat s-tier"><div class="k">Tier mix</div><div class="tierbars">${bars}</div></div>
+  </div>`;
+}
+function pill(group,val,label){
+  const on = state.filters[group]===val ? " on" : "";
+  return `<button class="pill${on}" data-act="filter" data-group="${esc(group)}" data-val="${esc(val)}">${esc(label)}</button>`;
+}
+function filterBar(R){
+  const classes=[...new Set(R.map(r=>r.class).filter(Boolean))].sort();
+  const projects=[...new Set(R.map(r=>r.project).filter(Boolean))].sort();
+  const outcomes=["shipped","partial","corrected","abandoned","pending"];
+  const g=(label,html)=>`<div class="fgroup"><span class="glabel">${label}</span>${html}</div>`;
+  return `<div class="filters">
+    ${g("Class", classes.map(c=>pill("class",c,c)).join(""))}
+    ${g("Tier", ["L1","L2","L3","L4"].map(t=>pill("tier",t,t)).join(""))}
+    ${g("Outcome", outcomes.map(o=>pill("outcome",o,o)).join(""))}
+    ${g("Project", projects.map(p=>pill("project",p,p)).join(""))}
+  </div>`;
+}
+function renderRoutes(){
+  const R=state.data.routes;
+  if(!R.length) return statStrip(computeStats(R)) +
+    emptyState("No routes logged yet","Cortex writes a line here every time it routes a task. Run something through the protocol and it will appear.");
+  const filtered=R.filter(r=>passFilter(r,state.filters));
+  const feed = filtered.length
+    ? `<div class="feed">${filtered.map(routeCard).join("")}</div>`
+    : emptyState("No routes match these filters","Clear a filter pill to widen the view.");
+  return statStrip(computeStats(R)) + filterBar(R) + feed;
+}
+
+/* ======================= analytics view ======================= */
+function countMap(R, keyfn){
+  const m=new Map();
+  R.forEach(r=>{ const k=keyfn(r); if(k==null||k==="") return; m.set(k,(m.get(k)||0)+1); });
+  return m;
+}
+function mapToSorted(m){ return [...m.entries()].map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value); }
+
+function svgHBars(items, accent){
+  if(!items.length) return "";
+  const max=Math.max(1,...items.map(i=>i.value));
+  const rowH=30, pad=6, labelW=118, barX=labelW+12, barMaxW=600-barX-46;
+  const W=600, H=items.length*rowH+pad*2;
+  let rows="";
+  items.forEach((it,idx)=>{
+    const y=pad+idx*rowH, cy=y+rowH/2;
+    const bw=Math.max(2,(it.value/max)*barMaxW);
+    const color=it.color||accent;
+    rows+=`<text x="${labelW}" y="${cy}" class="c-label" text-anchor="end" dominant-baseline="middle">${esc(it.label)}</text>`
+        + `<rect x="${barX}" y="${y+7}" width="${bw}" height="${rowH-15}" rx="4" fill="${color}" opacity="0.92"></rect>`
+        + `<text x="${barX+bw+8}" y="${cy}" class="c-val" dominant-baseline="middle">${it.value}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart" preserveAspectRatio="xMinYMin meet" role="img">${rows}</svg>`;
+}
+function svgVBars(items, accent){
+  if(!items.length) return "";
+  const max=Math.max(1,...items.map(i=>i.value));
+  const W=600,H=210, padL=30, padB=30, padT=10, padR=8;
+  const plotW=W-padL-padR, plotH=H-padB-padT, n=items.length, step=plotW/n;
+  const bw=Math.max(4, step*0.6);
+  let grid="", gl=4;
+  for(let i=0;i<=gl;i++){
+    const gy=padT+plotH*(i/gl), v=Math.round(max*(1-i/gl));
+    grid+=`<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" class="c-grid"/>`
+        + `<text x="${padL-6}" y="${gy}" class="c-axis" text-anchor="end" dominant-baseline="middle">${v}</text>`;
+  }
+  let bars="", every=Math.max(1,Math.ceil(n/9));
+  items.forEach((it,idx)=>{
+    const x=padL+idx*step+(step-bw)/2;
+    const bh=(it.value/max)*plotH, y=padT+plotH-bh;
+    bars+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(0,bh)}" rx="3" fill="${accent}" opacity="0.92"><title>${esc(it.label)}: ${it.value}</title></rect>`;
+    if(idx%every===0 || idx===n-1){
+      bars+=`<text x="${x+bw/2}" y="${H-padB+15}" class="c-axis" text-anchor="middle">${esc(it.label)}</text>`;
+    }
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img">${grid}${bars}</svg>`;
+}
+function svgMeter(segs){
+  const total=segs.reduce((a,s)=>a+s.value,0)||1;
+  const W=600,H=42; let x=0, rects="";
+  segs.forEach(s=>{ if(s.value<=0) return; const w=(s.value/total)*W;
+    rects+=`<rect x="${x}" y="0" width="${Math.max(0,w-1.5)}" height="${H}" fill="${s.color}"><title>${esc(s.label)}: ${s.value}</title></rect>`;
+    x+=w; });
+  const svg=`<svg viewBox="0 0 ${W} ${H}" class="chart" preserveAspectRatio="none" role="img" style="border-radius:8px;overflow:hidden">${rects}</svg>`;
+  const legend='<div class="legend">'+segs.filter(s=>s.value>0).map(s=>
+    `<span class="li"><span class="sw" style="background:${s.color}"></span>${esc(s.label)} <b>${s.value}</b></span>`).join("")+"</div>";
+  return svg+legend;
+}
+function weekBuckets(R){
+  const dayMs=86400000;
+  function monday(d){ const x=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()));
+    const dow=(x.getUTCDay()+6)%7; x.setUTCDate(x.getUTCDate()-dow); return x.getTime(); }
+  const counts=new Map(); let lo=Infinity, hi=-Infinity;
+  R.forEach(r=>{ const t=Date.parse(r.ts); if(isNaN(t)) return;
+    const m=monday(new Date(t)); counts.set(m,(counts.get(m)||0)+1); if(m<lo)lo=m; if(m>hi)hi=m; });
+  if(!isFinite(lo)) return [];
+  const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const out=[];
+  for(let m=lo;m<=hi;m+=7*dayMs){ const d=new Date(m);
+    out.push({label:MON[d.getUTCMonth()]+" "+d.getUTCDate(), value:counts.get(m)||0}); }
+  return out;
+}
+function lowConfCounts(R){
+  const c={Route:0,Tier:0,Spec:0};
+  R.forEach(r=>{
+    if((r.route_confidence||r.confidence||"").toLowerCase()==="low") c.Route++;
+    if((r.tier_confidence ||r.confidence||"").toLowerCase()==="low") c.Tier++;
+    if((r.spec_confidence ||r.confidence||"").toLowerCase()==="low") c.Spec++;
+  });
+  return c;
+}
+function chartPanel(title, sub, inner){
+  return `<section class="panel"><div class="panel-h"><h2>${esc(title)}</h2><span class="panel-sub">${esc(sub)}</span></div>${inner}</section>`;
+}
+function renderAnalytics(){
+  const R=state.data.routes;
+  if(!R.length) return emptyState("Nothing to chart yet","Analytics populate from routing decisions as they accumulate.");
+
+  const tiers=["L1","L2","L3","L4"].map(t=>({label:t, value:R.filter(r=>String(r.tier).toUpperCase()===t).length, color:TIER_COLOR[t]}));
+  const classes=mapToSorted(countMap(R,r=>r.class));
+  const systems=mapToSorted(countMap(R,r=>r.system));
+  const weeks=weekBuckets(R);
+
+  const outOrder=["shipped","partial","corrected","abandoned","pending"];
+  const outCounts={}; outOrder.forEach(o=>outCounts[o]=0);
+  R.forEach(r=>{ const o=r.outcome||"pending"; if(outCounts[o]===undefined) outCounts[o]=0; outCounts[o]++; });
+  const outSegs=outOrder.filter(o=>outCounts[o]>0).map(o=>({label:o, value:outCounts[o], color:OUT_COLOR[o]}));
+
+  const low=lowConfCounts(R);
+  const lowItems=[
+    {label:"Route", value:low.Route, color:"#c0392b"},
+    {label:"Tier",  value:low.Tier,  color:"#d97706"},
+    {label:"Spec",  value:low.Spec,  color:"#c0392b"},
+  ];
+
+  return `<div class="chart-grid">
+    ${chartPanel("Routes over time","per week", svgVBars(weeks,"#5b21b6"))}
+    ${chartPanel("Tier distribution","L1–L4", svgHBars(tiers))}
+    ${chartPanel("Class breakdown","by task type", svgHBars(classes,"#191919"))}
+    ${chartPanel("System usage","routed to", svgHBars(systems,"#5b21b6"))}
+    ${chartPanel("Outcome split","resolved vs pending", svgMeter(outSegs))}
+    ${chartPanel("Low-confidence flags","per dimension", svgHBars(lowItems))}
+  </div>`;
+}
+
+/* ======================= intake view ======================= */
+const RECMAP={add:["add","rec-add"], skip:["skip","rec-skip"], trial:["trial","rec-trial"], maybe:["maybe","rec-maybe"]};
+function recChip(rec){
+  const m=RECMAP[rec]||[rec||"—","rec-none"];
+  return `<span class="rec ${m[1]}">${esc(m[0])}</span>`;
+}
+function intakeCard(it){
+  const summary=it.summary ? `<div class="ic-summary">${esc(it.summary)}</div>` : "";
+  const link=it.url ? `<a class="ic-link" href="${esc(it.url)}" target="_blank" rel="noopener">${esc(hostPath(it.url))} ↗</a>` : "";
+  const kind=it.kind ? `<div class="ic-kind">${esc(it.kind)}</div>` : "";
+  return `<div class="intake-card" data-act="toggle">
+    <div class="ic-head">${recChip(it.recommendation)}<span class="ic-time">${ago(it.ts)}</span></div>
+    <div class="ic-title">${esc(it.title)}</div>
+    ${kind}
+    <div class="ic-body">${summary}${link}</div>
+  </div>`;
+}
+function renderIntake(){
+  const I=state.data.inbox;
+  if(!I.length) return emptyState("Intake pipeline is empty","Drop a link into @cortexbuildbot and reviewed candidates will flow through these columns.");
+  const COLS=[
+    {t:"In flight", statuses:["pending","reviewing"]},
+    {t:"Reviewed / Building", statuses:["reviewed","building"]},
+    {t:"Integrated", statuses:["integrated"]},
+    {t:"Rejected / Failed", statuses:["rejected","failed"]},
+    {t:"Answered", statuses:["answered"]},
+  ];
+  const cols=COLS.map(col=>{
+    const items=I.filter(x=>col.statuses.includes(x.status));
+    const body = items.length ? items.map(intakeCard).join("")
+      : `<div class="empty-s" style="padding:10px 2px">nothing here</div>`;
+    return `<div class="kcol"><div class="kcol-h"><span class="t">${esc(col.t)}</span><span class="n">${items.length}</span></div>
+      <div class="kcards">${body}</div></div>`;
+  }).join("");
+  return `<div class="kanban">${cols}</div>`;
+}
+
+/* ======================= installs view ======================= */
+function installCard(it){
+  const note=it.note ? `<div class="inst-note">${esc(it.note)}</div>` : "";
+  const cmds=esc((it.commands||[]).join("\n"));
+  const when = it.status==="done" ? ago(it.done_ts||it.ts) : ago(it.ts);
+  return `<div class="install-card">
+    <div class="inst-head">
+      <span class="inst-label">${esc(it.label)}</span>
+      <span class="badge status-${esc(it.status)}">${esc(it.status)}</span>
+      <span class="inst-time">${when}</span>
+    </div>
+    ${note}
+    <pre class="codeblock">${cmds}</pre>
+  </div>`;
+}
+function renderInstalls(){
+  const N=state.data.installs;
+  if(!N.length) return emptyState("No queued installs","Setup commands surfaced by intake builds land here until you run them.");
+  const pending=N.filter(i=>i.status!=="done");
+  const done=N.filter(i=>i.status==="done");
+  const group=(title,arr)=> arr.length ? `<section class="panel">
+      <div class="panel-h"><h2>${title}</h2><span class="panel-sub">${arr.length}</span></div>
+      ${arr.map(installCard).join("")}</section>` : "";
+  const pendingBlock = pending.length ? group("Pending",pending)
+    : `<section class="panel"><div class="panel-h"><h2>Pending</h2><span class="panel-sub">0</span></div>
+       ${emptyState("Queue is clear","Every surfaced install has been run. Nice.")}</section>`;
+  return `<div class="inst-groups">${pendingBlock}${group("Done",done)}</div>`;
+}
+
+/* ======================= shell ======================= */
+function emptyState(title,sub){
+  const mark=`<svg class="empty-mark" width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">`
+    + `<rect x="0.5" y="0.5" width="25" height="25" fill="none" stroke="#191919" stroke-width="1"/>`
+    + `<rect x="6" y="6" width="6" height="6" fill="#191919"/><rect x="14" y="6" width="6" height="6" fill="#191919"/>`
+    + `<rect x="6" y="14" width="6" height="6" fill="#191919"/><rect x="14" y="14" width="6" height="6" fill="#191919"/></svg>`;
+  return `<div class="panel"><div class="empty">${mark}`
+    + `<div class="empty-t">${esc(title)}</div><div class="empty-s">${esc(sub||"")}</div></div></div>`;
+}
+function updateTabs(){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view===state.view));
+  if(state.data){
+    const c=state.data.meta.counts;
+    const set=(id,n)=>{ const el=document.getElementById(id); if(el) el.textContent=n; };
+    set("tc-routes",c.routes); set("tc-intake",c.inbox); set("tc-installs",c.installs);
+  }
+}
+function render(){
+  updateTabs();
+  const main=document.getElementById("main");
+  if(!state.data){ main.innerHTML=emptyState("Connecting to Cortex…","Reading the routing log."); return; }
+  const v=state.view;
+  main.innerHTML = v==="analytics" ? renderAnalytics()
+                 : v==="intake"    ? renderIntake()
+                 : v==="installs"  ? renderInstalls()
+                 : renderRoutes();
+}
+
+/* ======================= events ======================= */
+document.addEventListener("click", e=>{
+  const a=e.target.closest("[data-act]");
+  if(!a) return;
+  const act=a.dataset.act;
+  if(act==="tab"){ if(state.view!==a.dataset.view){ state.view=a.dataset.view; render(); } }
+  else if(act==="filter"){
+    const g=a.dataset.group, v=a.dataset.val;
+    state.filters[g] = state.filters[g]===v ? null : v;
+    render();
+  }
+  else if(act==="toggle"){
+    if(e.target.closest("a")) return;
+    a.classList.toggle("open");
+  }
+});
+
+/* ======================= live loop ======================= */
+async function poll(){
+  try{
+    const res=await fetch("/api/data",{cache:"no-store"});
+    const json=await res.json();
+    state.lastFetch=Date.now();
+    const d=document.getElementById("livedot"); if(d) d.classList.remove("down","stale");
+    if(json.meta && json.meta.hash!==state.hash){
+      state.hash=json.meta.hash; state.data=json; render();
+    } else { updateTabs(); }
+  }catch(err){
+    const d=document.getElementById("livedot"); if(d) d.classList.add("down");
+  }
+}
+function tickAgo(){
+  const el=document.getElementById("ago"); if(!el) return;
+  if(!state.lastFetch){ el.textContent="connecting…"; return; }
+  const s=Math.floor((Date.now()-state.lastFetch)/1000);
+  el.textContent="updated "+s+"s ago";
+  const dot=document.getElementById("livedot");
+  if(dot && !dot.classList.contains("down")) dot.classList.toggle("stale", s>12);
+}
+
+render();
+poll();
+setInterval(poll, 4000);
+setInterval(tickAgo, 1000);
+</script>
+</body>
+</html>'''
+
+
+# --------------------------------------------------------------------------- #
+# HTTP server
+# --------------------------------------------------------------------------- #
+class Handler(BaseHTTPRequestHandler):
+    server_version = "cortex-ui/1.0"
+
+    def _send(self, code, body, ctype):
+        data = body.encode("utf-8") if isinstance(body, str) else body
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_GET(self):
+        path = self.path.split("?", 1)[0]
+        if path == "/":
+            self._send(200, HTML_PAGE, "text/html; charset=utf-8")
+        elif path == "/api/data":
+            try:
+                payload = build_payload()
+                body = json.dumps(payload, default=str)
+                self._send(200, body, "application/json; charset=utf-8")
+            except Exception as exc:  # never crash the server on a bad read
+                self._send(500, json.dumps({"error": str(exc)}), "application/json")
+        elif path == "/favicon.ico":
+            self._send(204, b"", "image/x-icon")
+        else:
+            self._send(404, "not found", "text/plain")
+
+    def log_message(self, *args):  # keep stdout clean (only the URL is printed)
+        pass
+
+
+def serve(start_port, open_browser):
+    httpd = None
+    port = None
+    last_err = None
+    for p in range(start_port, start_port + 11):
+        try:
+            httpd = ThreadingHTTPServer(("127.0.0.1", p), Handler)
+            port = p
+            break
+        except OSError as exc:
+            last_err = exc
+            continue
+    if httpd is None:
+        raise SystemExit(
+            f"cortex-ui: could not bind a port in range "
+            f"{start_port}-{start_port + 10} ({last_err})"
+        )
+
+    url = f"http://127.0.0.1:{port}/"
+    print(f"cortex-ui live at {url}")
+    print("  reading (read-only):")
+    for label, path in (("log", LOG_PATH), ("inbox", INBOX_PATH), ("installs", INSTALLS_PATH)):
+        mark = "ok" if path.exists() else "missing (empty state)"
+        print(f"    {label:9s} {path}  [{mark}]")
+    print("  Ctrl-C to stop.")
+
+    if open_browser:
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\ncortex-ui stopped.")
+    finally:
+        httpd.server_close()
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        prog="cortex-ui",
+        description="Local live dashboard for the Cortex routing layer (read-only).",
+    )
+    ap.add_argument("--port", type=int, default=7777,
+                    help="preferred port (falls through the next 10 if busy). Default 7777.")
+    ap.add_argument("--no-open", action="store_true",
+                    help="do not auto-open the browser.")
+    args = ap.parse_args()
+    serve(args.port, not args.no_open)
+
+
+if __name__ == "__main__":
+    main()

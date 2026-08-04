@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# cortex-command — launch the Cortex Command browser frontend.
+#
+#   cortex-command [--port N] [--no-open] [--dev]
+#
+# Production (default): build command/ if the dist is missing or older than any
+# source file, start the server on --port (default 7788), and open the browser
+# unless --no-open. Dev (--dev): run tsx watch + vite concurrently via the
+# workspace dev script. Does not touch bin/cortex or bin/cortex-ui.
+set -euo pipefail
+
+# ---- resolve paths (repo root = this script's dir/..) ----------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+CMD="$ROOT/command"
+
+# ---- args ------------------------------------------------------------------
+PORT=7788
+NO_OPEN=0
+DEV=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --port)     PORT="${2:?--port needs a value}"; shift 2 ;;
+    --port=*)   PORT="${1#*=}"; shift ;;
+    --no-open)  NO_OPEN=1; shift ;;
+    --dev)      DEV=1; shift ;;
+    -h|--help)
+      grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "cortex-command: unknown argument '$1'" >&2; exit 2 ;;
+  esac
+done
+
+if [ ! -d "$CMD" ]; then
+  echo "cortex-command: workspace not found at $CMD" >&2
+  exit 1
+fi
+
+# ---- dev mode: tsx watch + vite -------------------------------------------
+if [ "$DEV" -eq 1 ]; then
+  echo "cortex-command: dev mode (tsx watch + vite) — Ctrl-C to stop"
+  exec npm run dev --prefix "$CMD"
+fi
+
+# ---- production: build if stale -------------------------------------------
+SERVER_ENTRY="$CMD/server/dist/index.js"
+WEB_ENTRY="$CMD/web/dist/index.html"
+
+need_build=0
+if [ ! -f "$SERVER_ENTRY" ] || [ ! -f "$WEB_ENTRY" ]; then
+  need_build=1
+else
+  # Any source file newer than either built entrypoint => rebuild.
+  for entry in "$SERVER_ENTRY" "$WEB_ENTRY"; do
+    if find "$CMD/shared/src" "$CMD/server/src" "$CMD/web/src" \
+         "$CMD/web/index.html" "$CMD/web/vite.config.ts" \
+         -type f -newer "$entry" 2>/dev/null | grep -q .; then
+      need_build=1
+      break
+    fi
+  done
+fi
+
+if [ "$need_build" -eq 1 ]; then
+  echo "cortex-command: building (dist missing or stale)…"
+  npm run build --prefix "$CMD"
+else
+  echo "cortex-command: dist up to date, skipping build."
+fi
+
+URL="http://127.0.0.1:${PORT}/"
+if [ "$NO_OPEN" -eq 0 ]; then
+  ( sleep 1; command -v open >/dev/null 2>&1 && open "$URL" ) &
+fi
+
+echo "cortex-command: starting server at $URL"
+exec node "$SERVER_ENTRY" --port "$PORT"

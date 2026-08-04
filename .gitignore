@@ -7,6 +7,11 @@ retros/
 # OMC working state — session ids, agent replays, model transcripts
 .omc/
 
+# Cortex Command — build artifacts + deps (node_modules, dist, tsbuildinfo)
+command/node_modules
+command/**/dist
+command/**/*.tsbuildinfo
+
 # Standard
 __pycache__/
 *.pyc

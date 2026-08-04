@@ -1,0 +1,234 @@
+/* ============================================================================
+   ReasonBlocks — Cortex Command design system.
+
+   Engineering-brutalist trace-viewer on paper: sharp corners, hard shadows,
+   mono headings, no glow. Tokens and visual values are extracted VERBATIM from
+   bin/cortex-ui (the approved observatory aesthetic, lines ~222–468). Selectors
+   that assumed the observatory's page structure have been generalised into
+   reusable component classes here — nothing is redesigned.
+
+   Consumed by web/. Executors B/C compose these primitives into ChatView,
+   RunsView, cards, etc.; add component-specific rules in sibling files, not by
+   editing these tokens.
+   ============================================================================ */
+
+/* ---------- tokens ---------- */
+:root {
+  --paper: #fafafa;
+  --card: #fff;
+  --ink: #191919;
+  --ink-2: #222;
+  --sec: #444;
+  --sec-2: #555;
+  --muted: #9ca3af;
+  --muted-2: #aaa;
+  --line: #e5e5e5;       /* hairline internal rules */
+  --cardline: #ddd;      /* card borders */
+  --grid: rgba(0, 0, 0, 0.04);
+  --green: #059669;  --green-bg: #f0fdf4;
+  --purple: #5b21b6;
+  --amber: #d97706;
+  --red: #c0392b;
+  --code-bg: #f5f5f5;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  --sans: "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* ---------- reset + graph-paper page ---------- */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background-color: var(--paper);
+  background-image:
+    repeating-linear-gradient(0deg, var(--grid) 0 1px, transparent 1px 26px),
+    repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 26px);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+a { color: var(--purple); text-decoration: none; }
+a:hover { text-decoration: underline; }
+::selection { background: rgba(91, 33, 182, 0.16); }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 0 22px; }
+.mono { font-family: var(--mono); }
+
+/* ---------- top bar / header ---------- */
+header {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--card);
+  border-bottom: 2px solid var(--ink);
+}
+.head-in { display: flex; align-items: center; gap: 20px; padding: 14px 0; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.logomark { flex: none; display: block; }
+.wordmark {
+  font-family: var(--mono); font-weight: 700; font-size: 17px;
+  letter-spacing: 0.06em; color: var(--ink); text-transform: uppercase;
+}
+.tagline {
+  font-family: var(--mono); color: var(--muted); font-size: 11px;
+  letter-spacing: 0.04em; border-left: 1px solid var(--line); padding-left: 12px;
+  text-transform: uppercase;
+}
+.live { display: flex; align-items: center; gap: 9px; margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.livedot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+.livedot.stale { background: var(--amber); animation: none; }
+.livedot.down { background: var(--red); animation: none; }
+.live-label { font-weight: 700; letter-spacing: 0.16em; color: var(--ink); font-size: 11px; }
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.8); }
+}
+
+/* ---------- nav tabs / toggle buttons ---------- */
+.tabs { display: flex; gap: 6px; padding: 0 0 12px; overflow-x: auto; }
+.tab {
+  appearance: none; background: var(--card); border: 1px solid var(--ink);
+  color: var(--ink); font-family: var(--mono); font-size: 12px; font-weight: 600;
+  padding: 6px 13px; border-radius: 2px; cursor: pointer; white-space: nowrap;
+  display: flex; align-items: center; gap: 8px; transition: background .12s, color .12s;
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.tab:hover { background: #f0f0f0; }
+.tab.active { background: var(--ink); color: #fff; }
+.tab .tc { font-family: var(--mono); font-size: 11px; color: var(--muted); background: #f0f0f0; padding: 1px 6px; border-radius: 2px; }
+.tab.active .tc { color: #fff; background: rgba(255, 255, 255, 0.18); }
+
+/* ---------- panel ---------- */
+.panel {
+  background: var(--card); border: 1px solid var(--ink); border-radius: 2px;
+  padding: 20px; margin-bottom: 20px; box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.08);
+}
+.panel-h { display: flex; align-items: baseline; gap: 12px; margin: -2px 0 16px; }
+.panel-h h2 {
+  font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--ink);
+  margin: 0; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.panel-sub { font-family: var(--mono); color: var(--muted); font-size: 11px; }
+
+/* ---------- pills / filter buttons ---------- */
+.pill {
+  appearance: none; background: var(--card); border: 1px solid var(--cardline);
+  color: var(--sec); font-family: var(--mono); font-size: 11.5px; padding: 3px 10px;
+  border-radius: 2px; cursor: pointer; transition: all .12s;
+}
+.pill:hover { color: var(--ink); border-color: var(--ink); }
+.pill.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+/* ---------- chips (routing chip grammar) ---------- */
+.chip {
+  font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 3px 8px;
+  border-radius: 2px; border: 1px solid var(--ink); background: var(--card);
+  color: var(--ink); white-space: nowrap;
+}
+.chip-sys { background: var(--ink); color: #fff; border-color: var(--ink); }
+.chip-pat { background: var(--card); color: var(--ink); border-color: var(--ink); }
+.chip-agent { background: var(--card); color: var(--ink-2); border-color: var(--cardline); }
+.chip-recon { background: var(--card); color: var(--green); border-color: var(--green); }
+.sep { color: var(--muted); font-size: 12px; padding: 0 1px; user-select: none; }
+.glyph { color: var(--purple); font-family: var(--mono); font-size: 12px; font-weight: 700; padding: 0 2px; }
+.glyph.arrow { color: var(--green); }
+.tier { font-weight: 700; letter-spacing: 0.04em; color: #fff; }
+.tier-L1 { background: var(--green); border-color: var(--green); }
+.tier-L2 { background: var(--ink); border-color: var(--ink); }
+.tier-L3 { background: var(--purple); border-color: var(--purple); }
+.tier-L4 { background: var(--red); border-color: var(--red); }
+
+/* ---------- confidence dots ---------- */
+.cdots { display: flex; gap: 4px; align-items: center; }
+.cdot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); cursor: help; }
+.cdot.c-high { background: var(--green); }
+.cdot.c-med { background: var(--muted); }
+.cdot.c-low { background: var(--red); }
+.cdot.c-none { background: transparent; border: 1px solid var(--muted); }
+
+/* ---------- outcome badges (solid accents) ---------- */
+.ob {
+  font-family: var(--mono); font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; padding: 3px 8px; border-radius: 2px; border: 1px solid transparent;
+  white-space: nowrap;
+}
+.ob-shipped { color: #fff; background: var(--green); border-color: var(--green); }
+.ob-partial { color: var(--sec); background: var(--card); border-color: var(--cardline); }
+.ob-corrected { color: #fff; background: var(--amber); border-color: var(--amber); }
+.ob-abandoned { color: #fff; background: var(--red); border-color: var(--red); }
+.ob-pending { color: var(--sec); background: var(--card); border-color: var(--cardline); display: inline-flex; align-items: center; gap: 5px; }
+.ob-pending .pdot { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); animation: pulse 1.6s ease-in-out infinite; }
+
+/* ---------- metadata badges ---------- */
+.badge {
+  font-family: var(--mono); font-size: 10.5px; padding: 2px 8px; border-radius: 2px;
+  border: 1px solid var(--cardline); color: var(--sec); background: var(--card);
+}
+.b-proj { color: var(--ink); border-color: var(--ink); }
+.b-class { color: var(--sec); border-color: var(--cardline); }
+.status-done { color: #fff; background: var(--green); border-color: var(--green); }
+.status-pending { color: #fff; background: var(--amber); border-color: var(--amber); }
+
+/* ---------- kanban / lanes (RunsView reuses these) ---------- */
+.kanban { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; align-items: start; }
+.kcol {
+  background: var(--card); border: 1px solid var(--ink); border-radius: 2px;
+  padding: 13px; min-width: 0; box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.08);
+}
+.kcol-h {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 11px; padding: 0 2px 9px; border-bottom: 1px solid var(--line);
+}
+.kcol-h .t { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--ink); letter-spacing: 0.04em; text-transform: uppercase; }
+.kcol-h .n { font-family: var(--mono); font-size: 11px; color: var(--muted); background: #f0f0f0; padding: 1px 6px; border-radius: 2px; }
+.kcards { display: flex; flex-direction: column; gap: 10px; }
+
+/* ---------- collapsible cards (RunCard / intake card grammar) ---------- */
+.intake-card {
+  background: var(--card); border: 1px solid var(--cardline); border-radius: 2px;
+  padding: 12px; cursor: pointer; transition: border-color .12s;
+}
+.intake-card:hover { border-color: var(--ink); }
+.ic-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.ic-time { color: var(--muted); font-size: 10.5px; font-family: var(--mono); white-space: nowrap; }
+.ic-title { color: var(--ink); font-size: 12.5px; font-weight: 600; line-height: 1.35; word-break: break-word; }
+.ic-kind { font-family: var(--mono); color: var(--muted); font-size: 10.5px; margin-top: 4px; line-height: 1.45; }
+.ic-body { max-height: 0; overflow: hidden; transition: max-height .25s ease; }
+.intake-card.open .ic-body { max-height: 1600px; margin-top: 10px; }
+.ic-summary { color: var(--sec); font-size: 12px; line-height: 1.55; white-space: pre-wrap; border-top: 1px solid var(--line); padding-top: 9px; }
+.ic-link { display: inline-block; margin-top: 9px; font-size: 11px; font-family: var(--mono); word-break: break-all; }
+
+/* ---------- recommendation chips ---------- */
+.rec {
+  font-family: var(--mono); font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; padding: 2px 7px; border-radius: 2px; border: 1px solid transparent;
+}
+.rec-add { color: #fff; background: var(--green); border-color: var(--green); }
+.rec-skip { color: #fff; background: var(--red); border-color: var(--red); }
+.rec-trial { color: #fff; background: var(--purple); border-color: var(--purple); }
+.rec-maybe { color: #fff; background: var(--amber); border-color: var(--amber); }
+.rec-none { color: var(--muted); background: var(--card); border-color: var(--cardline); }
+
+/* ---------- code block (Bash bodies, command output) ---------- */
+.codeblock {
+  background: var(--code-bg); border: 1px solid var(--cardline); border-radius: 2px;
+  padding: 11px 12px; margin: 0; font-family: var(--mono); font-size: 12px; color: var(--ink-2);
+  overflow-x: auto; white-space: pre; line-height: 1.7;
+}
+
+/* ---------- empty / loading states ---------- */
+.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 52px 20px; gap: 7px; }
+.empty-mark { margin-bottom: 10px; display: block; }
+.empty-t { font-family: var(--mono); color: var(--ink); font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+.empty-s { color: var(--muted); font-size: 12.5px; max-width: 390px; font-style: italic; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 900px) {
+  .kanban { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) {
+  .kanban { grid-template-columns: 1fr; }
+  .tagline { display: none; }
+}
