@@ -122,7 +122,7 @@ def append_entry(entry):
 def make_entry(task, classification, system, pattern, agent, tier,
                tier_reason, system_reason, project, redirect_from,
                confidence=None, route_confidence=None, tier_confidence=None,
-               spec_confidence=None):
+               spec_confidence=None, legs=None):
     # Backwards compat: a single --confidence value seeds all three dimensions
     # unless the caller passes the specific flags explicitly.
     rc = route_confidence or confidence
@@ -145,10 +145,59 @@ def make_entry(task, classification, system, pattern, agent, tier,
         "route_confidence": rc,
         "tier_confidence": tc,
         "spec_confidence": sc,
+        "legs": legs,
         "outcome": None,
         "redirect_from": redirect_from,
         "user_correction": None,
     }
+
+
+# Splits a routing line's agent field back into the individual role tokens it named.
+_AGENT_SPLIT = re.compile(r"\s*(?:∥|\||\+|,|→|->|;)\s*")
+_AGENT_TRAIL = re.compile(r"\s*(?:\(.*|\bwave\s*\d+|\bstat\s*\d+|\blens\b|\d+)\s*$", re.I)
+
+
+def known_agents():
+    """Names of installed agents, for validating what a route claims to have used."""
+    base = CLAUDE_DIR / "agents"
+    if not base.exists():
+        return set()
+    out = set()
+    for f in base.rglob("*.md"):
+        if f.stem.lower() in _NON_AGENT:
+            continue
+        name, _ = _read_frontmatter(f)
+        out.add((name or f.stem).strip().lower())
+    return out
+
+
+def flag_unknown_agents(entry):
+    """Warn when the agent field holds something that is not an installed agent.
+
+    The field has been accumulating fan-out legs, output filenames and execution
+    topology alongside real specialist names, which is why nothing downstream can read
+    it. Warning at write time stops new junk entering without blocking anything: a
+    hard reject would break the automation that logs routes unattended.
+    """
+    raw = entry.get("agent") or ""
+    if not raw:
+        return
+    roster = known_agents()
+    if not roster:
+        return
+    unknown = []
+    for tok in _AGENT_SPLIT.split(raw):
+        tok = _AGENT_TRAIL.sub("", re.sub(r"\(.*?\)", "", tok)).strip(" []()-–:·")
+        if len(tok) < 3 or tok.lower() in roster:
+            continue
+        if re.match(r"^(?:executor|opus|sonnet|haiku|fable|codex|gemini|qc|reconciler|"
+                    r"synthesis|judge|self|omc:|oh-my-claudecode:)", tok, re.I):
+            continue  # execution topology, legitimately not a specialist
+        unknown.append(tok)
+    if unknown:
+        print(f"  [cortex] agent not in roster: {', '.join(unknown[:4])}", file=sys.stderr)
+        print(f"  [cortex] if these are fan-out legs rather than specialists, pass them "
+              f"as --legs so the agent field stays specialists-only", file=sys.stderr)
 
 
 def flag_low_confidence(entry):
@@ -180,12 +229,14 @@ def cmd_log(args):
         system_reason=args.system_reason,
         project=args.project,
         redirect_from=args.redirect_from,
+        legs=args.legs,
         confidence=args.confidence,
         route_confidence=args.route_confidence,
         tier_confidence=args.tier_confidence,
         spec_confidence=args.spec_confidence,
     )
     append_entry(entry)
+    flag_unknown_agents(entry)
     flag_low_confidence(entry)
     print(f"logged: {args.system} > {args.pattern} @ {args.tier}", file=sys.stderr)
 
@@ -236,12 +287,14 @@ def cmd_log_line(args):
         system_reason=args.system_reason,
         project=args.project,
         redirect_from=args.redirect_from,
+        legs=args.legs,
         confidence=args.confidence,
         route_confidence=args.route_confidence,
         tier_confidence=args.tier_confidence,
         spec_confidence=args.spec_confidence,
     )
     append_entry(entry)
+    flag_unknown_agents(entry)
     flag_low_confidence(entry)
     print(f"logged: {parsed['system']} > {parsed['pattern']} @ {parsed['tier']}", file=sys.stderr)
 
@@ -1214,6 +1267,9 @@ def build_parser():
     lg.add_argument("--system-reason", default=None)
     lg.add_argument("--project", default=None)
     lg.add_argument("--redirect-from", default=None)
+    lg.add_argument("--legs", action="append", default=None,
+                    help="a fan-out leg or work item (repeatable). Keeps the agent "
+                         "field to real specialists so it stays machine-readable")
     lg.add_argument("--confidence", default=None, choices=["high", "med", "low"],
                     help="overall confidence — seeds route/tier/spec if those aren't passed individually")
     lg.add_argument("--route-confidence", default=None, choices=["high", "med", "low"],
@@ -1234,6 +1290,9 @@ def build_parser():
     ll.add_argument("--system-reason", default=None)
     ll.add_argument("--project", default=None)
     ll.add_argument("--redirect-from", default=None)
+    ll.add_argument("--legs", action="append", default=None,
+                    help="a fan-out leg or work item (repeatable). Keeps the agent "
+                         "field to real specialists so it stays machine-readable")
     ll.add_argument("--confidence", default=None, choices=["high", "med", "low"],
                     help="overall confidence — seeds route/tier/spec if those aren't passed individually")
     ll.add_argument("--route-confidence", default=None, choices=["high", "med", "low"])
