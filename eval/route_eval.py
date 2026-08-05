@@ -169,7 +169,7 @@ def run_batch(cases, model, sandbox, claude_bin):
     body = payload.get("result") or ""
     for c in cases:  # keep the raw response so a dropped case is diagnosable offline
         out[c["id"]]["batch_raw"] = body[:2000]
-    for line in (payload.get("result") or "").splitlines():
+    for line in body.splitlines():
         line = line.strip().strip("`").strip()
         m = re.match(r"^(\d+)[.)]\s*(.+)$", line)
         if not m:
@@ -186,6 +186,16 @@ def run_batch(cases, model, sandbox, claude_bin):
         out[cases[idx]["id"]] = {"raw": m.group(2).strip(), "route": parsed, "error": None,
                                  "batched": True, "duration_s": None,
                                  "cost_usd": cost if idx == 0 else 0.0}
+
+    # The model does not reliably return one line per task. Cases it dropped are re-run
+    # individually: scoring them as "no route produced" would report protocol failures
+    # that never happened, which is the exact false-signal this suite exists to avoid.
+    missing = [c for c in cases if out[c["id"]].get("route") is None]
+    for c in missing:
+        retry = run_case(c, model, sandbox, claude_bin)
+        retry["batch_retry"] = True
+        retry["batch_raw"] = body[:2000]
+        out[c["id"]] = retry
     return out
 
 
@@ -260,11 +270,10 @@ def main():
                     help="refuse to start a run whose estimate exceeds this (default: $5)")
     ap.add_argument("--cost-per-run", type=float, default=0.53,
                     help="observed per-run cost used for the estimate (default: 0.53)")
-    ap.add_argument("--batch", action="store_true",
-                    help="run independent cases in one shared session (~73%% cheaper). "
-                         "KNOWN DEFECT 2026-08-05: the model may return fewer numbered "
-                         "lines than tasks; 3 of 10 were dropped. Off by default until "
-                         "missing cases are retried individually")
+    ap.add_argument("--no-batch", action="store_true",
+                    help="isolate every case. By default independent cases share one "
+                         "session (much cheaper) and any the model drops are re-run "
+                         "individually. Paired cases are never batched")
     ap.add_argument("--if-changed", action="store_true",
                     help="skip entirely when cortex.md is unchanged since the last run")
     args = ap.parse_args()
@@ -292,7 +301,7 @@ def main():
     # under measurement.
     pinned = set(needed) | {c["id"] for c in cases
                             if c["kind"] == "paired" or any("base" in a for a in c["assert"])}
-    if not args.batch:
+    if args.no_batch:
         isolated, batched = list(cases), []
     else:
         isolated = [c for c in cases if c["id"] in pinned]
