@@ -1133,8 +1133,11 @@ def main(argv=None):
                   f"(+{rec['gap_from_preceding_route_min']}min after last route)  "
                   f"{rec['evidence'][:80]!r}")
         print("\nbaselines (median over attributed windows)")
-        for name, base in sorted(baselines.items()):
-            print(f"  {name:12s} turns={base['turns']} min={base['minutes']} n={base['n']}")
+        # Correction events carry no class, so the key can be None. Sort and format
+        # defensively rather than letting a schema addition crash the summary.
+        for name, base in sorted(baselines.items(), key=lambda kv: kv[0] or ""):
+            label = name or "(no class)"
+            print(f"  {label:12s} turns={base['turns']} min={base['minutes']} n={base['n']}")
     return 0
 
 
