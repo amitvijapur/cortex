@@ -87,7 +87,13 @@ def load_roster():
                     name = v.strip().strip("\"'")
                 elif k.strip().lower() == "description" and v.strip():
                     desc = v.strip().strip("\"'")[:400]
+        if name == path.stem.replace("-", " ").title() and "name:" not in text[:400]:
+            continue   # documentation, not an agent: no frontmatter name to declare one
         division = path.parent.name if path.parent != AGENTS_DIR else "root"
+        # integrations/ holds per-tool variants reusing a canonical agent's name verbatim;
+        # keyed by name a plain walk lets the variant replace the real definition.
+        if name in roster and "integrations" not in Path(roster[name]["path"]).parts:
+            continue
         roster[name] = {"division": division, "description": desc, "path": str(path)}
     return roster
 

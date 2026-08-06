@@ -407,7 +407,13 @@ def known_agents():
         if f.stem.lower() in _NON_AGENT:
             continue
         name, _ = _read_frontmatter(f)
-        out.add((name or f.stem).strip().lower())
+        # An agent declares itself with a frontmatter `name:`. Files without one are
+        # READMEs, playbooks and worked examples -- 43 of them in this roster. Titling
+        # their filenames turned them into plausible-looking agents, which inflated the
+        # count and let documentation satisfy the validator.
+        if not name:
+            continue
+        out.add(name.strip().lower())
     return out
 
 
