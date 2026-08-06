@@ -144,6 +144,19 @@ WINDOW_MAX_GAP = timedelta(hours=3)
 DECLARATION_WINDOW = timedelta(seconds=90)
 
 
+# The log has gained an event-typed schema and now carries rows that are not routes — an
+# `event: "outcome"` row settles an earlier route and has no task, tier, class, or agent
+# of its own. Deriving over one attributes a window to a row that never declared anything
+# and manufactures signals out of a schema change, which is the failure this file exists
+# to avoid. Rows are routes when they say so, or when they predate the field entirely.
+#
+# This lives here, not in each consumer, for the same reason attribution does: two files
+# that each decide for themselves what counts as a route will eventually disagree, and
+# then neither number can be trusted. score_adherence.py imports it.
+def is_route(row):
+    return row.get("event") in (None, "route")
+
+
 # ---------------------------------------------------------------------------
 # Dissatisfaction lexicon
 #
@@ -1039,14 +1052,16 @@ def main(argv=None):
     if not log_path.exists():
         print(f"no log at {log_path}", file=sys.stderr)
         return 1
-    rows = []
+    raw = []
     for line in log_path.read_text().splitlines():
         line = line.strip()
         if line:
             try:
-                rows.append(json.loads(line))
+                raw.append(json.loads(line))
             except ValueError:
                 continue
+    rows = [r for r in raw if is_route(r)]
+    non_route_rows = len(raw) - len(rows)
 
     sessions = load_sessions(Path(args.projects))
     anchor_index, anchor_times = build_anchor_index(sessions)
@@ -1110,7 +1125,9 @@ def main(argv=None):
         methods = Counter(r["attribution"]["method"] for r in records)
         signals = Counter(f["signal"] for r in records for f in r["signals"])
         states = Counter(r["derived_state"] for r in records)
-        print(f"\nrows                {len(records)}")
+        print(f"\nrows                {len(records)}"
+              + (f"  ({non_route_rows} non-route event row(s) excluded)"
+                 if non_route_rows else ""))
         print(f"transcript sessions {len(sessions)}")
         print(f"attributed          {len(attributed)} "
               f"({100*len(attributed)/max(1,len(records)):.0f}%)")

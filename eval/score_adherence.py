@@ -295,13 +295,13 @@ def metric(mid, status, question, numerator=None, denominator=None, *,
 # ---------------------------------------------------------------------------
 TIER_RE = re.compile(r"^L[1-4]$")
 
-# The log recently gained an event-typed schema and now carries rows that are not routes
-# — an `event: "outcome"` row settles an earlier route and has no task, tier, or agent of
-# its own. Scoring it as a route would invent five separate protocol violations out of a
+# The log has an event-typed schema and carries rows that are not routes — an
+# `event: "outcome"` row settles an earlier route and has no task, tier, or agent of its
+# own. Scoring it as a route would invent five separate protocol violations out of a
 # schema change, which is precisely the manufactured-finding failure this file is built to
-# avoid. Rows are routes when they say so, or when they predate the field entirely.
-def is_route(row):
-    return row.get("event") in (None, "route")
+# avoid. The test is imported rather than restated for the same reason attribution is: the
+# two files must not be able to disagree about what a route is.
+is_route = D.is_route
 
 
 # The routing line is parsed into system / pattern / agent by `cortex log-line`. When the
