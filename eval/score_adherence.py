@@ -840,6 +840,39 @@ def build(rows, sessions, anchor_index, anchor_times):
     return records, session_records, metrics, by_month
 
 
+def check_floors(metrics, thresholds_path):
+    """Enforce the adherence floors. Returns the number of breaches.
+
+    Floors catch regression. They are deliberately set below where the system sits, so a
+    breach means something changed rather than that the current state is good — the
+    targets in the same file are what good would look like. A metric that cannot be
+    measured in this run is reported as such and never counted as a pass.
+    """
+    spec = json.loads(Path(thresholds_path).read_text())
+    by_id = {m["id"]: m for m in metrics}
+    breaches, checked = [], 0
+    print("\nADHERENCE GATE")
+    for mid, rule in spec.get("floors", {}).items():
+        m = by_id.get(mid)
+        if not m or m.get("value") is None:
+            print(f"  {mid:26s}    n/a  not measurable this run — NOT counted as a pass")
+            continue
+        checked += 1
+        ok = m["value"] >= rule["min"]
+        if not ok:
+            breaches.append(mid)
+        print(f"  {mid:26s} {m['value']:6.1%}  floor {rule['min']:.0%}   "
+              f"{'ok' if ok else 'BREACH'}")
+    for mid, rule in spec.get("targets", {}).items():
+        m = by_id.get(mid)
+        if m and m.get("value") is not None:
+            gap = rule["goal"] - m["value"]
+            print(f"  {mid:26s} {m['value']:6.1%}  target {rule['goal']:.0%}   "
+                  f"{'met' if gap <= 0 else f'{gap:+.0%} to go'}")
+    print(f"\n{checked} floor(s) checked, {len(breaches)} breached")
+    return len(breaches)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--log", default=str(LOG_PATH), help="cortex log to read (never written)")
@@ -847,6 +880,12 @@ def main(argv=None):
     parser.add_argument("--out", default=str(DEFAULT_OUT), help="output JSONL")
     parser.add_argument("--summary", action="store_true", help="print a summary to stdout")
     parser.add_argument("--dry-run", action="store_true", help="score but write nothing")
+    parser.add_argument("--check", action="store_true",
+                        help="enforce the floors in adherence-thresholds.json and exit "
+                             "non-zero if any is breached. Floors detect regression; they "
+                             "do not certify the current state as acceptable")
+    parser.add_argument("--thresholds",
+                        default=str(Path(__file__).resolve().parent / "adherence-thresholds.json"))
     parser.add_argument("--show", metavar="METRIC",
                         help="print the per-route classification behind one metric, with "
                              "evidence, for hand-checking. One of: hint_before_route, "
@@ -911,6 +950,10 @@ def main(argv=None):
 
     if args.summary or args.dry_run:
         summarise(metrics, by_month, ghosts, len(rows), len(sessions), non_route_rows)
+    if args.check:
+        breaches = check_floors(metrics, args.thresholds)
+        if breaches:
+            return 1
     return 0
 
 
