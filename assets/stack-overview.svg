@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 300" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+<defs>
+  <radialGradient id="src" cx="0.5" cy="0.5" r="0.5">
+    <stop offset="0" stop-color="#eaf5ff"/><stop offset="1" stop-color="#4a9eff"/>
+  </radialGradient>
+  <radialGradient id="vign" cx="0.14" cy="0.5" r="0.95">
+    <stop offset="0" stop-color="#12233f"/><stop offset="1" stop-color="#0b1220"/>
+  </radialGradient>
+  <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+    <feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="soft" x="-140%" y="-140%" width="380%" height="380%"><feGaussianBlur stdDeviation="9"/></filter>
+  <marker id="arw" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#63b3ed"/></marker>
+  <marker id="arwd" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#4a9eff" opacity="0.8"/></marker>
+</defs>
+<rect width="1240" height="300" rx="18" fill="url(#vign)"/>
+<text x="620.0" y="44.0" text-anchor="middle" font-size="13" font-weight="600" fill="#7f97b8">a task arrives</text>
+<path d="M 620.0 56.0 C 620.0 64.0 620.0 64.0 620.0 74.0" fill="none" stroke="#4a9eff" stroke-width="7" stroke-opacity="0.14" stroke-linecap="round" filter="url(#soft)"/><path d="M 620.0 56.0 C 620.0 64.0 620.0 64.0 620.0 74.0" fill="none" stroke="#5aa6ff" stroke-width="2.4" stroke-opacity="0.88" stroke-linecap="round" marker-end="url(#arw)"/>
+<rect x="370.0" y="80.0" width="500.0" height="66.0" rx="12.0" fill="#4a9eff" fill-opacity="0.16" stroke="#4a9eff" stroke-opacity="0.45"/>
+<text x="620.0" y="106.0" text-anchor="middle" font-size="14" font-weight="700" fill="#dce8f7">Routing protocol</text>
+<text x="620.0" y="128.0" text-anchor="middle" font-size="11.5" font-weight="500" fill="#9dcbff">classify · calibrate · hint · route · specialise · log · execute · outcome</text>
+<path d="M 620.0 148.0 C 620.0 181.0 150.0 181.0 150.0 192.0" fill="none" stroke="#4a9eff" stroke-width="7" stroke-opacity="0.14" stroke-linecap="round" filter="url(#soft)"/><path d="M 620.0 148.0 C 620.0 181.0 150.0 181.0 150.0 192.0" fill="none" stroke="#5aa6ff" stroke-width="2.4" stroke-opacity="0.88" stroke-linecap="round" marker-end="url(#arw)"/>
+<path d="M 620.0 148.0 C 620.0 181.0 385.0 181.0 385.0 192.0" fill="none" stroke="#4a9eff" stroke-width="7" stroke-opacity="0.14" stroke-linecap="round" filter="url(#soft)"/><path d="M 620.0 148.0 C 620.0 181.0 385.0 181.0 385.0 192.0" fill="none" stroke="#5aa6ff" stroke-width="2.4" stroke-opacity="0.88" stroke-linecap="round" marker-end="url(#arw)"/>
+<path d="M 620.0 148.0 C 620.0 181.0 620.0 181.0 620.0 192.0" fill="none" stroke="#4a9eff" stroke-width="7" stroke-opacity="0.14" stroke-linecap="round" filter="url(#soft)"/><path d="M 620.0 148.0 C 620.0 181.0 620.0 181.0 620.0 192.0" fill="none" stroke="#5aa6ff" stroke-width="2.4" stroke-opacity="0.88" stroke-linecap="round" marker-end="url(#arw)"/>
+<path d="M 620.0 148.0 C 620.0 181.0 855.0 181.0 855.0 192.0" fill="none" stroke="#4a9eff" stroke-width="7" stroke-opacity="0.14" stroke-linecap="round" filter="url(#soft)"/><path d="M 620.0 148.0 C 620.0 181.0 855.0 181.0 855.0 192.0" fill="none" stroke="#5aa6ff" stroke-width="2.4" stroke-opacity="0.88" stroke-linecap="round" marker-end="url(#arw)"/>
+<path d="M 620.0 148.0 C 620.0 181.0 1090.0 181.0 1090.0 192.0" fill="none" stroke="#4a9eff" stroke-width="7" stroke-opacity="0.14" stroke-linecap="round" filter="url(#soft)"/><path d="M 620.0 148.0 C 620.0 181.0 1090.0 181.0 1090.0 192.0" fill="none" stroke="#5aa6ff" stroke-width="2.4" stroke-opacity="0.88" stroke-linecap="round" marker-end="url(#arw)"/>
+<circle cx="150.0" cy="214.0" r="22.0" fill="#4a9eff" opacity="0.16" filter="url(#soft)"/><circle cx="150.0" cy="214.0" r="13.0" fill="none" stroke="#4a9eff" stroke-opacity="0.3" stroke-width="1.1"/><circle cx="150.0" cy="214.0" r="8.0" fill="#4a9eff" fill-opacity="1.0" filter="url(#glow)"/>
+<circle cx="385.0" cy="214.0" r="22.0" fill="#4a9eff" opacity="0.16" filter="url(#soft)"/><circle cx="385.0" cy="214.0" r="13.0" fill="none" stroke="#4a9eff" stroke-opacity="0.3" stroke-width="1.1"/><circle cx="385.0" cy="214.0" r="8.0" fill="#4a9eff" fill-opacity="1.0" filter="url(#glow)"/>
+<circle cx="620.0" cy="214.0" r="22.0" fill="#4a9eff" opacity="0.16" filter="url(#soft)"/><circle cx="620.0" cy="214.0" r="13.0" fill="none" stroke="#4a9eff" stroke-opacity="0.3" stroke-width="1.1"/><circle cx="620.0" cy="214.0" r="8.0" fill="#4a9eff" fill-opacity="1.0" filter="url(#glow)"/>
+<circle cx="855.0" cy="214.0" r="22.0" fill="#4a9eff" opacity="0.16" filter="url(#soft)"/><circle cx="855.0" cy="214.0" r="13.0" fill="none" stroke="#4a9eff" stroke-opacity="0.3" stroke-width="1.1"/><circle cx="855.0" cy="214.0" r="8.0" fill="#4a9eff" fill-opacity="1.0" filter="url(#glow)"/>
+<circle cx="1090.0" cy="214.0" r="22.0" fill="#4a9eff" opacity="0.16" filter="url(#soft)"/><circle cx="1090.0" cy="214.0" r="13.0" fill="none" stroke="#4a9eff" stroke-opacity="0.3" stroke-width="1.1"/><circle cx="1090.0" cy="214.0" r="8.0" fill="#4a9eff" fill-opacity="1.0" filter="url(#glow)"/>
+<text x="150.0" y="252.0" text-anchor="middle" font-size="13.5" font-weight="600" fill="#dce8f7">Orchestrators</text>
+<text x="150.0" y="270.0" text-anchor="middle" font-size="11.5" font-weight="500" fill="#7f97b8">OMC · GSD</text>
+<text x="385.0" y="252.0" text-anchor="middle" font-size="13.5" font-weight="600" fill="#dce8f7">Specialists</text>
+<text x="385.0" y="270.0" text-anchor="middle" font-size="11.5" font-weight="500" fill="#7f97b8">the agent roster</text>
+<text x="620.0" y="252.0" text-anchor="middle" font-size="13.5" font-weight="600" fill="#dce8f7">Quality gates</text>
+<text x="620.0" y="270.0" text-anchor="middle" font-size="11.5" font-weight="500" fill="#7f97b8">CCG · Sentinel · gitleaks</text>
+<text x="855.0" y="252.0" text-anchor="middle" font-size="13.5" font-weight="600" fill="#dce8f7">Domain models</text>
+<text x="855.0" y="270.0" text-anchor="middle" font-size="11.5" font-weight="500" fill="#7f97b8">Kronos · QuantMind</text>
+<text x="1090.0" y="252.0" text-anchor="middle" font-size="13.5" font-weight="600" fill="#dce8f7">Infrastructure</text>
+<text x="1090.0" y="270.0" text-anchor="middle" font-size="11.5" font-weight="500" fill="#7f97b8">MCPs · knowledge graphs</text>
+</svg>
