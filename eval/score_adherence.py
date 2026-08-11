@@ -168,6 +168,7 @@ import json
 import os
 import re
 import sys
+from importlib.machinery import SourceFileLoader
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -907,6 +908,25 @@ def main(argv=None):
             continue
     rows = [r for r in raw if is_route(r)]
     non_route_rows = len(raw) - len(rows)
+
+    # Fold correction events into the routes they reference, using bin/cortex's own
+    # collapse() rather than a second implementation of it.
+    #
+    # This is not cosmetic. The log became append-only after this scorer was written:
+    # an outcome is now recorded as a separate event carrying a `ref` to its route, not
+    # as a field on the route row. Reading raw rows therefore counted 128/154 outcomes
+    # while the CLI's derived view saw 138/154 — a 6.5-point gap that tripped the
+    # adherence floor for a reason that did not exist. Two views of one log disagreeing
+    # is the exact defect this project exists to remove, so there is one view.
+    try:
+        _cli = SourceFileLoader("cortex_cli", str(REPO / "bin" / "cortex")).load_module()
+        derived = {id(r): r for r in _cli.collapse(raw)} if hasattr(_cli, "collapse") else {}
+        if derived:
+            by_hash = {r.get("task_hash"): r for r in _cli.collapse(raw)}
+            rows = [by_hash.get(r.get("task_hash"), r) for r in rows]
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ! could not fold correction events ({exc}); outcome counts may be low",
+              file=sys.stderr)
 
     sessions = D.load_sessions(Path(args.projects))
     anchor_index, anchor_times = D.build_anchor_index(sessions)
