@@ -4,7 +4,7 @@
 
 # Cortex
 
-**A meta-router for coding agents.** It sits above every workflow system in your stack and decides — per task — which system runs, which specialist drives, and how much effort the work deserves. Then it logs the decision and learns from the outcome.
+**A meta-router for coding agents.** It sits above every workflow system in your stack and decides — per task — which system runs, which specialist drives, and how much effort the work deserves. Then it logs the decision, learns from the outcome, and ships the checks that tell you whether any of that is actually happening.
 
 <sub>Built for **Claude Code** · runs on **Cursor, Codex, Gemini CLI, Aider & Windsurf** too — [see how ↓](#using-cortex-with-other-agents)</sub>
 
@@ -43,6 +43,7 @@ Cortex does not replace your workflow systems. It picks between them, attaches t
 
 - [Why this exists](#why-this-exists)
 - [Install](#install)
+- [What it costs you in context](#what-it-costs-you-in-context)
 - [Using Cortex with other agents](#using-cortex-with-other-agents)
 - [How it works](#how-it-works)
   - [The routing protocol](#the-routing-protocol)
@@ -52,6 +53,7 @@ Cortex does not replace your workflow systems. It picks between them, attaches t
   - [Three confidences](#three-confidences)
   - [CCG: the council, as one tool](#ccg-the-council-as-one-tool)
 - [The self-learning loop](#the-self-learning-loop)
+- [Checking the router](#checking-the-router)
 - [CLI reference](#cli-reference)
 - [Slash commands](#slash-commands)
 - [The stack Cortex routes between](#the-stack-cortex-routes-between)
@@ -121,6 +123,27 @@ The installer copies:
 | `templates/cortex.md` | `~/.claude/cortex.md` | The framework itself — only if you don't already have one |
 
 It does **not** touch `~/.claude/settings.json`. The SessionStart hook is opt-in; see [below](#optional-sessionstart-hook).
+
+---
+
+## What it costs you in context
+
+Cortex loads on every session, so it is worth knowing the bill before you take it on.
+
+The shipped `templates/cortex.md` is **about 6,000 tokens**. That is the framework: the routing protocol, the tier system, the learning loop, and a Decision Shortcuts table. It does not grow on its own.
+
+What grows is the registry you put underneath it, and the honest warning is that it grows faster than you notice. Mine reached 19,000 tokens before I measured it, because every new tool got a full entry and none were ever removed. Checking each entry against the routing log showed that eight of them had never been reached for in 154 routes.
+
+<p align="center"><img src="assets/context-cost.svg" alt="What loads before you type: the framework, your registry, and your agent roster, with cold registry detail lifting out to on-demand" width="880"></p>
+
+**The design rule that came out of that.** Split the registry by temperature, and split it in one specific place:
+
+- **The Decision Shortcuts table stays loaded.** It is the index. One line per task type, naming the system and when to reach for it. This is what lets the router know a tool exists at all.
+- **The per-system detail can load on demand.** Pattern tables, setup notes, caveats. Read them when a route actually lands on that system.
+
+Getting this backwards is the trap. Moving the shortcut rows out is not a saving, it is an amnesia bug: the router stops knowing the system exists, so it never routes there, so the entry looks unused, so you delete it. Keep the index hot and the manual cold.
+
+One more thing worth measuring rather than assuming. On a populated setup the framework is rarely what dominates. Agent and skill descriptions are loaded by your harness for every session too, and a few hundred agents will outweigh `cortex.md` several times over. Count those before optimising the framework.
 
 ---
 
@@ -265,23 +288,28 @@ It is skipped on L1/L2 routine work and anywhere the answer is obvious. Three mo
 
 Every route is appended to `~/.claude/cortex-log.jsonl` as a byproduct of working. No ceremony, no retros.
 
-```json
-{
-  "ts": "2026-07-14T09:12:04Z",
-  "task": "Refactor auth middleware to use the new session store",
-  "class": "build",
-  "system": "OMC",
-  "pattern": "ralplan",
-  "agent": "Backend Architect",
-  "tier": "L3",
-  "tier_reason": "Touches auth; L2 would skip the verifier pass",
-  "system_reason": "Needs plan + verify loop, not one-shot autopilot",
-  "route_confidence": "high",
-  "tier_confidence": "med",
-  "spec_confidence": "high",
-  "outcome": "shipped"
-}
+The log is **append-only**. When a route is declared, one line is written. When the task ends, the outcome is a *second* line that references the first by id. The original row's bytes are never touched.
+
+```jsonc
+// written when the routing line is declared
+{"event": "route", "event_id": "ev_7a8d080fc1f5", "ts": "2026-07-14T09:12:04Z",
+ "task": "Refactor auth middleware to use the new session store",
+ "class": "build", "system": "OMC", "pattern": "ralplan",
+ "agent": "Backend Architect", "tier": "L3",
+ "tier_reason": "Touches auth; L2 would skip the verifier pass",
+ "system_reason": "Needs plan + verify loop, not one-shot autopilot",
+ "route_confidence": "high", "tier_confidence": "med", "spec_confidence": "high"}
+
+// appended when the task ends — a separate line, pointing back at the route
+{"event": "outcome", "event_id": "ev_3a664b902d4d", "ref": "ev_7a8d080fc1f5",
+ "outcome": "shipped", "outcome_note": "landed behind a flag"}
 ```
+
+A correction works the same way: `/cortex-reroute` appends an event recording what you actually wanted, rather than editing the original decision. The current state of any route is *derived* by replaying its events, so the record of having been wrong survives being corrected. `cortex history <event_id>` prints that chain.
+
+<p align="center"><img src="assets/append-only-log.svg" alt="Three log lines for one route: the original route, an outcome, and a correction, collapsed into a derived current view" width="880"></p>
+
+This matters more than it sounds. If a correction overwrote the original row, the log would only ever show what you eventually decided, never what the router first proposed. The gap between those two is the only training signal in the system worth anything.
 
 The loop closes on itself:
 
@@ -294,13 +322,59 @@ Phases activate on data thresholds, not on a calendar:
 | **1 · Visibility** | day one | Every route logged with full reasoning. `/cortex-log` replays it. | Active |
 | **2 · Pattern surfacing** | ~20 routes | `cortex learn` finds `(class, system, pattern)` tuples that repeat ≥3× and proposes them as Decision Shortcuts. | Active |
 | **3 · Similarity bias** | ~40+ routes | `cortex hint` surfaces similar past routes, scored by outcome. Shipped adds signal; corrected and abandoned subtract. **Advisory — it informs the call, it does not make it.** | Active |
-| **4 · Outcome capture** | day one | Every task ends with an outcome. Correction triggers ("reroute", "wrong approach", "actually use X") mark the last route corrected and link the replacement. | Active |
+| **4 · Outcome capture** | day one | Every task ends with an outcome. Correction triggers ("reroute", "wrong approach", "actually use X") append a correction event that links the replacement, leaving the original decision on the record. | Active |
 
 Two design rules hold the whole thing together:
 
 **Approve, don't auto-apply.** The learning layer proposes; you dispose. Cortex never silently edits its own `cortex.md`. A router that rewrites its own rules without asking is a router you cannot trust.
 
 **Correction beats prediction.** A negative hint score means past attempts at that route failed. That is worth more than any similarity heuristic, because it is ground truth you gave it.
+
+---
+
+## Checking the router
+
+A router that describes its own reasoning is easy to build and easy to fool. The reasoning is generated text, so it can sound principled while the behaviour underneath drifts. `eval/` exists to make the difference observable.
+
+<p align="center"><img src="assets/evidence-layer.svg" alt="An append-only log read by three independent checks, each returning a verdict, with failures feeding back as fixes" width="880"></p>
+
+**Adherence scoring.** The protocol says to declare a tier, run `hint` before routing, and record an outcome. Whether that actually happens is measurable. `score_adherence.py --check` scores every route in the log against floors in [`eval/adherence-thresholds.json`](eval/adherence-thresholds.json) and exits non-zero when one breaks.
+
+```bash
+python3 eval/score_adherence.py --check
+```
+
+**Routing consistency.** `route_eval.py` puts a task to a headless session and asserts a property of the routing line that comes back. Cases are graded by how much they prove:
+
+| Kind | What it proves |
+|---|---|
+| `canary` | Only recall. The answer is a worked example inside `cortex.md`. Catches a protocol that stopped loading. |
+| `rule` | Generalisation. A rule applied to a task the document has never seen. |
+| `paired` | A directional property, comparing a transformed task against its own base rather than an absolute tier. |
+| `shape` | Whether the fan-out heuristic fires at all. |
+
+Paired cases always get their own session, because an earlier answer in a shared session anchors a later one, which is exactly what a paired comparison must not allow. Independent cases share one by default, since it is much cheaper and nothing about them needs isolation. `CORTEX_HOME` is redirected to a sandbox so a model dutifully following the protocol cannot append test routes into the real log.
+
+**Retrieval evaluation.** Agent selection is scored on a sealed train/test split, with hard negatives drawn from the same division as the target. Random negatives flatter retrieval, since telling a security agent from a marketing agent is trivial. Same-division confusion is where it actually fails.
+
+### What this does not establish
+
+These tests answer *"did something break?"* They do not answer *"was that a good route?"* There is no oracle for routing quality here, and building one needs labelled data that does not exist yet. A green run means the protocol still behaves the way `cortex.md` describes. A suite that quietly grew into a quality claim would be exactly the false assurance this was built to remove.
+
+Two more limits worth stating plainly:
+
+**The floors are targets, not pre-registrations.** They were chosen with the current numbers already visible, which the [thresholds file says in its own header](eval/adherence-thresholds.json). The mitigation is that they sit *below* where the system runs today, so they detect regression rather than certifying the present state as good.
+
+**A floor is not a goal.** `hint_before_route` has a floor of 25% and a target of 60%. The floor is not an endorsement of 29%; it is the line below which something has clearly broken. Conflating the two is how a scorecard starts failing constantly and gets ignored, which is worse than having none.
+
+### What the harness has rejected
+
+A test suite that has never contradicted its author is decoration. Two things this one killed:
+
+- **A tuned BM25F ranker for agent retrieval.** It beat the baseline on the development set, then lost on held-out data. The corpus hygiene fixes shipped; the ranker did not.
+- **A capability-confinement layer for the intake worker.** Built, then removed once the evidence showed it was defending against an adversary that does not exist for a personal tool, while breaking credentials and plugin hooks in the process. The correctness half survived: approvals are bound to a content hash, and a build reports success only when the target file actually changed, not when the model says it did.
+
+It has also caught its own author. Changing a default ranker silently rewrote what every evaluation row was measuring, because the harness had not recorded which ranker produced a result.
 
 ---
 
@@ -329,11 +403,21 @@ cortex reroute --to "Direct > batched-edits @ L2"    # mark last route corrected
 
 # Review and audit
 cortex show --project cortex        # last 20 routes with reasoning
+cortex history <event_id>           # one route's full correction chain, oldest first
 cortex learn                        # detect repeating patterns, write proposals
 cortex learn --check                # one terse line, silent if nothing pending
 cortex audit-tiers --tier L3        # every L3: was it really an L3?
 cortex audit-tiers --reclassify <task_hash> --to L2 --note "L2 would have done"
 cortex doctor                       # audit setup for drift between docs, skills, and log
+```
+
+And the checks, which live in [`eval/`](eval/) rather than the CLI:
+
+```bash
+python3 eval/score_adherence.py --check   # score the log against its floors; non-zero on a breach
+python3 eval/route_eval.py --dry-run      # list routing-consistency cases, spend nothing
+python3 eval/route_eval.py                # run them for real, one isolated session per case
+python3 eval/test_cortex_cli.py           # behavioural tests for the CLI itself
 ```
 
 `hint`, `audit-tiers`, `learn`, `show`, and `outcome` all degrade gracefully on an empty log — a fresh install tells you there is nothing to say rather than crashing.
@@ -390,7 +474,7 @@ Cortex is only as good as the registry underneath it. Mine is below — not beca
 
 | Tool | What it's for |
 |---|---|
-| [Agency Agents](https://github.com/msitarzewski/agency-agents) | 230+ domain specialists across 18 divisions — engineering, security, design, finance, GIS, marketing, and more. The specialist pool the router fans out across, and where `Specialise` picks a driver (or several). |
+| [Agency Agents](https://github.com/msitarzewski/agency-agents) | 240+ domain specialists across 20+ divisions — engineering, security, design, finance, GIS, marketing, and more. The specialist pool the router fans out across, and where `Specialise` picks a driver (or several). |
 | [anthropics/skills](https://github.com/anthropics/skills) | First-party document skills: `docx`, `pdf`, `pptx`, `xlsx`, plus `mcp-builder` and `skill-creator`. |
 | [knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins) | Anthropic's non-code plugins — data, legal, enterprise search, PM, marketing. |
 | [claude-tag-plugins](https://github.com/anthropics/claude-tag-plugins) | Anthropic's SaaS connector plugins — Jira, Linear, Salesforce, HubSpot, Datadog, and more. One plugin per service. |
@@ -481,8 +565,12 @@ cortex/
 ├── LICENSE              ← MIT
 ├── install.sh           ← copies files into ~/.claude/
 ├── bin/
-│   └── cortex           ← the CLI: log, log-line, show, hint, outcome,
-│                          learn, reroute, audit-tiers, doctor, init
+│   └── cortex           ← the CLI: log, log-line, show, history, hint,
+│                          outcome, learn, reroute, audit-tiers, doctor, init
+├── eval/                ← the checks: adherence scoring, routing-consistency
+│   │                      replay, retrieval evaluation, CLI tests
+│   ├── README.md        ← what each one does and does not establish
+│   └── adherence-thresholds.json  ← the floors, with their reasoning
 ├── skills/
 │   ├── cortex-log/      ← /cortex-log
 │   ├── cortex-learn/    ← /cortex-learn
