@@ -8,19 +8,37 @@ Subcommands:
   learn        detect patterns in the log; writes Obsidian proposals
   reroute      mark the last entry as corrected
   outcome      set the last entry's outcome (shipped / abandoned / partial / corrected)
+  history      show a route's full correction chain (what it looked like before)
   hint         surface similar past routes for a task, weighted by outcome
   audit-tiers  list L3/L4 routes so you can check whether L2 would have sufficed
   doctor       audit cortex setup for drift between docs, skills, and log
   init         discover your existing systems to prepare a personalized registry
   intake       inbox for skills/workflows captured for review (see cortex-intake)
   installs     pending-installs queue: setup commands surfaced by builds
+
+THE LOG IS APPEND-ONLY.
+  Every line is an immutable event. A routing decision is a `route` event (rows
+  written before events existed carry no `event` key and are read as routes).
+  Outcomes, reroutes and tier reclassifications are appended as their own events
+  that reference a route by id — they never rewrite the row they correct.
+
+  That matters because a baseline computed over this log has to be reproducible:
+  when corrections mutated rows in place, re-running an analysis over "the same"
+  141 rows could return a different answer with no new data logged, and there was
+  no way to recover what a route looked like before it was corrected.
+
+  `read_log()` returns the *derived current view* — routes with their corrections
+  folded in — so every reader (show / hint / learn / audit-tiers / doctor) sees
+  the same collapsed state from one place. `read_raw_log()` returns the events.
 """
 import argparse
+import concurrent.futures
 import hashlib
 import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -49,6 +67,29 @@ PATTERN_THRESHOLD = 3
 WEEKLY_GATE_DAYS = 7
 EXPECTED_SKILLS = ["cortex-log", "cortex-learn", "cortex-reroute"]
 OUTCOME_STATES = ["shipped", "abandoned", "partial", "corrected"]
+
+# Event kinds that correct an earlier route rather than record a new one.
+CORRECTION_KINDS = {"outcome", "reroute", "reclassify"}
+
+# Advisor CLIs that cortex.md's /ccg gate depends on. doctor probes these because
+# a registered gate whose providers are dead is worse than no gate: it reads as a
+# safety check that fires before irreversible actions while doing nothing.
+#   liveness — cheap "does this binary actually execute" check, run by default.
+#   deep     — real prompt round-trip, proves the provider answers. Opt-in: it
+#              costs tokens and takes seconds, so it is never in the weekly path.
+ADVISOR_PROBES = {
+    "codex":  {"liveness": ["--version"], "deep": ["exec", "reply with the single word OK"]},
+    # --skip-trust: without it the gemini fork refuses to run outside a trusted
+    # directory and exits non-zero, which would read as a dead provider.
+    "gemini": {"liveness": ["--version"], "deep": ["--skip-trust", "-p", "reply with the single word OK"]},
+    "qwen":   {"liveness": ["--version"], "deep": ["--skip-trust", "-p", "reply with the single word OK"]},
+    # antigravity: invocation shape not pinned here, so liveness only.
+    "agy":    {"liveness": ["--version"], "deep": None},
+}
+# name, or name+"?" for advisors whose absence is informational rather than a warning.
+ADVISORS = [a.strip() for a in os.environ.get("CORTEX_ADVISORS", "codex,gemini,agy?").split(",") if a.strip()]
+ADVISOR_PROBE_TIMEOUT = 6      # seconds; a slow probe reports unknown, never blocks
+ADVISOR_DEEP_TIMEOUT = 90
 
 # Workflow systems the log's `system` field is expected to use. doctor warns on
 # any that are registered but never routed to. Override with a comma-separated
@@ -82,7 +123,98 @@ def now_iso():
 
 
 def session_id():
+    """Legacy field: a UTC hour bucket.
+
+    This never identified anything — two routes an hour apart from the same
+    session get different values, and two unrelated sessions in the same hour get
+    the same one. It is kept verbatim so old rows and anything reading the field
+    stay valid; `run_id` / `session_ref` below are the identifiers that join.
+    """
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+
+
+_RUN_ID = None
+
+
+def run_id():
+    """Identifier for this CLI invocation. Stable within a process, unique across
+    processes — two rows sharing a run_id were written by the same command."""
+    global _RUN_ID
+    if _RUN_ID is None:
+        seed = f"{datetime.now(timezone.utc).isoformat()}{os.getpid()}{os.urandom(8).hex()}"
+        _RUN_ID = "run_" + hashlib.sha1(seed.encode()).hexdigest()[:12]
+    return _RUN_ID
+
+
+_SESSION_REF = False  # False = not computed yet (None is a valid computed answer)
+
+
+def agent_session_id():
+    """Identifier for the agent session that produced this row, best effort.
+
+    Claude Code exports CLAUDE_CODE_SESSION_ID, which is the same id the transcript
+    is filed under — that is what makes a row joinable to the run that produced it.
+    When no host session id is exported (cron, a bare shell, another agent), fall
+    back to the parent process, which is stable for the life of that session.
+    Returns None when neither is available rather than inventing an id.
+    """
+    global _SESSION_REF
+    if _SESSION_REF is not False:
+        return _SESSION_REF
+    for var in ("CORTEX_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID"):
+        val = os.environ.get(var)
+        if val:
+            _SESSION_REF = val.strip()
+            return _SESSION_REF
+    _SESSION_REF = None
+    try:
+        ppid = os.getppid()
+        # Include the parent's start time so a recycled pid can't collide with an
+        # older session's rows.
+        r = subprocess.run(["ps", "-o", "lstart=", "-p", str(ppid)],
+                           capture_output=True, text=True, timeout=2)
+        started = r.stdout.strip()
+        if started:
+            _SESSION_REF = "ppid_" + hashlib.sha1(f"{ppid}|{started}".encode()).hexdigest()[:10]
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return _SESSION_REF
+
+
+def agent_model():
+    """The model this row was produced under, if the caller or host tells us.
+
+    Routing behaviour is a property of model plus document, so a row that doesn't
+    record the model can't be compared against a row from a different model.
+    """
+    for var in ("CORTEX_MODEL", "CLAUDE_MODEL", "ANTHROPIC_MODEL"):
+        val = os.environ.get(var)
+        if val:
+            return val.strip()
+    return None
+
+
+def sha256_file(path, short=12):
+    try:
+        digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except OSError:
+        return None
+    return digest[:short] if short else digest
+
+
+_CORTEX_MD_SHA = False
+
+
+def cortex_md_sha():
+    """Content hash of the routing document in force when this row was written.
+
+    cortex.md changes constantly. Without this, a shift in routing behaviour can't
+    be attributed to a document edit rather than to the model or to chance.
+    """
+    global _CORTEX_MD_SHA
+    if _CORTEX_MD_SHA is False:
+        _CORTEX_MD_SHA = sha256_file(CORTEX_MD)
+    return _CORTEX_MD_SHA
 
 
 def task_hash(task):
@@ -97,7 +229,8 @@ def project_name():
         return "unknown"
 
 
-def read_log():
+def read_raw_log():
+    """Every line in the log, exactly as written: route events and correction events."""
     if not LOG_PATH.exists():
         return []
     entries = []
@@ -113,16 +246,117 @@ def read_log():
     return entries
 
 
+def entry_id(row):
+    """Stable id for a raw row, so corrections can point at it.
+
+    New rows carry an explicit `event_id`. The rows written before events existed
+    do not, so they get a deterministic id derived from their own content — which
+    is what lets a correction reference a legacy row without rewriting it.
+    """
+    eid = row.get("event_id")
+    if eid:
+        return eid
+    seed = "|".join(str(row.get(k)) for k in ("ts", "task_hash", "system", "pattern"))
+    return "lg_" + hashlib.sha1(seed.encode()).hexdigest()[:12]
+
+
+def apply_correction(entry, ev):
+    """Fold one correction event into a derived route entry (in memory only)."""
+    kind = ev.get("event")
+    if kind == "outcome":
+        entry["outcome"] = ev.get("outcome")
+        if ev.get("outcome_note") is not None:
+            entry["outcome_note"] = ev["outcome_note"]
+    elif kind == "reroute":
+        entry["outcome"] = "corrected"
+        entry["user_correction"] = ev.get("user_correction")
+    elif kind == "reclassify":
+        # tier_audit_original must hold the tier as *first* logged. A second
+        # reclassification would otherwise record an already-corrected tier as
+        # the original and the real starting point would be lost from the view.
+        # (Legacy rows already carry this field from the old in-place path.)
+        if not entry.get("tier_audit_original"):
+            entry["tier_audit_original"] = entry.get("tier")
+        entry["tier"] = ev.get("tier")
+        entry["tier_audit_note"] = ev.get("tier_audit_note")
+    entry.setdefault("_corrections", []).append(ev)
+
+
+def collapse(raw):
+    """Derive the current view: routes with their correction events folded in.
+
+    One place computes this so `show`, `hint`, `learn`, `audit-tiers` and `doctor`
+    can't disagree about the state of a route. The returned dicts are copies with
+    two in-memory-only keys (`_id`, `_corrections`); nothing writes them back.
+    """
+    routes, by_id, events = [], {}, []
+    for row in raw:
+        if (row.get("event") or "route") in CORRECTION_KINDS:
+            events.append(row)
+            continue
+        e = dict(row)
+        e["_id"] = entry_id(row)
+        e["_corrections"] = []
+        by_id[e["_id"]] = e
+        routes.append(e)
+    for ev in events:  # file order is application order, so later events win
+        target = by_id.get(ev.get("ref"))
+        if target is not None:
+            apply_correction(target, ev)
+    return routes
+
+
+def orphan_events(raw):
+    """Correction events whose target route is missing — a hand-edited log, or an
+    event written against a row that was later removed. doctor surfaces these."""
+    ids = {entry_id(r) for r in raw if (r.get("event") or "route") not in CORRECTION_KINDS}
+    return [r for r in raw
+            if (r.get("event") or "route") in CORRECTION_KINDS and r.get("ref") not in ids]
+
+
+def read_log():
+    """The current view of every route. This is what all readers consume."""
+    return collapse(read_raw_log())
+
+
 def append_entry(entry):
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with LOG_PATH.open("a") as f:
         f.write(json.dumps(entry) + "\n")
 
 
+def new_event_id(prefix="ev"):
+    seed = f"{datetime.now(timezone.utc).isoformat()}{os.getpid()}{os.urandom(8).hex()}"
+    return f"{prefix}_" + hashlib.sha1(seed.encode()).hexdigest()[:12]
+
+
+def append_event(kind, ref, outcome, **fields):
+    """Append a correction event. Never touches the row it corrects.
+
+    `outcome` is written onto the event itself as well as into the derived view:
+    naive readers that only tail the last line (the outcome-nudge hook does) read
+    that field to decide whether the most recent route is still open, and they
+    would otherwise see a correction as an unclosed route.
+    """
+    ev = {
+        "ts": now_iso(),
+        "event": kind,
+        "event_id": new_event_id(),
+        "ref": ref,
+        "run_id": run_id(),
+        "session_id": session_id(),
+        "session_ref": agent_session_id(),
+        "outcome": outcome,
+    }
+    ev.update(fields)
+    append_entry(ev)
+    return ev
+
+
 def make_entry(task, classification, system, pattern, agent, tier,
                tier_reason, system_reason, project, redirect_from,
                confidence=None, route_confidence=None, tier_confidence=None,
-               spec_confidence=None):
+               spec_confidence=None, legs=None, model=None):
     # Backwards compat: a single --confidence value seeds all three dimensions
     # unless the caller passes the specific flags explicitly.
     rc = route_confidence or confidence
@@ -130,6 +364,12 @@ def make_entry(task, classification, system, pattern, agent, tier,
     sc = spec_confidence or confidence
     return {
         "ts": now_iso(),
+        "event": "route",
+        "event_id": new_event_id(),
+        "run_id": run_id(),
+        "session_ref": agent_session_id(),
+        "model": model or agent_model(),
+        "cortex_md_sha": cortex_md_sha(),
         "session_id": session_id(),
         "project": project or project_name(),
         "task": task,
@@ -145,10 +385,65 @@ def make_entry(task, classification, system, pattern, agent, tier,
         "route_confidence": rc,
         "tier_confidence": tc,
         "spec_confidence": sc,
+        "legs": legs,
         "outcome": None,
         "redirect_from": redirect_from,
         "user_correction": None,
     }
+
+
+# Splits a routing line's agent field back into the individual role tokens it named.
+_AGENT_SPLIT = re.compile(r"\s*(?:∥|\||\+|,|→|->|;)\s*")
+_AGENT_TRAIL = re.compile(r"\s*(?:\(.*|\bwave\s*\d+|\bstat\s*\d+|\blens\b|\d+)\s*$", re.I)
+
+
+def known_agents():
+    """Names of installed agents, for validating what a route claims to have used."""
+    base = CLAUDE_DIR / "agents"
+    if not base.exists():
+        return set()
+    out = set()
+    for f in base.rglob("*.md"):
+        if f.stem.lower() in _NON_AGENT:
+            continue
+        name, _ = _read_frontmatter(f)
+        # An agent declares itself with a frontmatter `name:`. Files without one are
+        # READMEs, playbooks and worked examples -- 43 of them in this roster. Titling
+        # their filenames turned them into plausible-looking agents, which inflated the
+        # count and let documentation satisfy the validator.
+        if not name:
+            continue
+        out.add(name.strip().lower())
+    return out
+
+
+def flag_unknown_agents(entry):
+    """Warn when the agent field holds something that is not an installed agent.
+
+    The field has been accumulating fan-out legs, output filenames and execution
+    topology alongside real specialist names, which is why nothing downstream can read
+    it. Warning at write time stops new junk entering without blocking anything: a
+    hard reject would break the automation that logs routes unattended.
+    """
+    raw = entry.get("agent") or ""
+    if not raw:
+        return
+    roster = known_agents()
+    if not roster:
+        return
+    unknown = []
+    for tok in _AGENT_SPLIT.split(raw):
+        tok = _AGENT_TRAIL.sub("", re.sub(r"\(.*?\)", "", tok)).strip(" []()-–:·")
+        if len(tok) < 3 or tok.lower() in roster:
+            continue
+        if re.match(r"^(?:executor|opus|sonnet|haiku|fable|codex|gemini|qc|reconciler|"
+                    r"synthesis|judge|self|omc:|oh-my-claudecode:)", tok, re.I):
+            continue  # execution topology, legitimately not a specialist
+        unknown.append(tok)
+    if unknown:
+        print(f"  [cortex] agent not in roster: {', '.join(unknown[:4])}", file=sys.stderr)
+        print(f"  [cortex] if these are fan-out legs rather than specialists, pass them "
+              f"as --legs so the agent field stays specialists-only", file=sys.stderr)
 
 
 def flag_low_confidence(entry):
@@ -180,12 +475,15 @@ def cmd_log(args):
         system_reason=args.system_reason,
         project=args.project,
         redirect_from=args.redirect_from,
+        legs=args.legs,
+        model=getattr(args, "model", None),
         confidence=args.confidence,
         route_confidence=args.route_confidence,
         tier_confidence=args.tier_confidence,
         spec_confidence=args.spec_confidence,
     )
     append_entry(entry)
+    flag_unknown_agents(entry)
     flag_low_confidence(entry)
     print(f"logged: {args.system} > {args.pattern} @ {args.tier}", file=sys.stderr)
 
@@ -236,12 +534,15 @@ def cmd_log_line(args):
         system_reason=args.system_reason,
         project=args.project,
         redirect_from=args.redirect_from,
+        legs=args.legs,
+        model=getattr(args, "model", None),
         confidence=args.confidence,
         route_confidence=args.route_confidence,
         tier_confidence=args.tier_confidence,
         spec_confidence=args.spec_confidence,
     )
     append_entry(entry)
+    flag_unknown_agents(entry)
     flag_low_confidence(entry)
     print(f"logged: {parsed['system']} > {parsed['pattern']} @ {parsed['tier']}", file=sys.stderr)
 
@@ -463,16 +764,18 @@ def cmd_learn(args):
         print(f"\n{len(written)} new proposal(s) written to {PROPOSALS_DIR}")
 
 
+def route_line(e):
+    return f"{e.get('system', '?')} > {e.get('pattern', '?')} @ {e.get('tier', '?')}"
+
+
 def cmd_reroute(args):
     entries = read_log()
     if not entries:
         print("no entries to reroute")
         return
     last = entries[-1]
-    prev_route = f"{last.get('system', '?')} > {last.get('pattern', '?')} @ {last.get('tier', '?')}"
-    last["outcome"] = "corrected"
-    last["user_correction"] = args.to
-    LOG_PATH.write_text("".join(json.dumps(e) + "\n" for e in entries))
+    prev_route = route_line(last)
+    append_event("reroute", last["_id"], outcome="corrected", user_correction=args.to)
     print(f"marked last route as corrected: {prev_route} → {args.to}")
     print("next /cortex log call should pass --redirect-from to link the corrected entry to the new route")
 
@@ -494,15 +797,55 @@ def cmd_outcome(args):
         print(f"last entry is already marked corrected (user_correction={last.get('user_correction')!r}); leaving as-is")
         return 0
     prev = last.get("outcome")
-    last["outcome"] = args.state
-    if args.note:
-        last["outcome_note"] = args.note
-    LOG_PATH.write_text("".join(json.dumps(e) + "\n" for e in entries))
-    route = f"{last.get('system', '?')} > {last.get('pattern', '?')} @ {last.get('tier', '?')}"
+    append_event("outcome", last["_id"], outcome=args.state, outcome_note=args.note)
+    route = route_line(last)
     if prev:
         print(f"updated outcome: {route}  ({prev} → {args.state})")
     else:
         print(f"marked outcome: {route}  → {args.state}")
+    return 0
+
+
+def cmd_history(args):
+    """Show a route and every correction appended against it, in order.
+
+    This is the question in-place rewriting could not answer: what did this route
+    look like before it was corrected, and when did each correction land.
+    """
+    entries = read_log()
+    key = args.ref
+    matches = [e for e in entries
+               if key in (e.get("task_hash"), e.get("_id"), e.get("event_id"))]
+    if not matches:
+        print(f"no route matching {key!r} (try a task_hash from `cortex show` or `audit-tiers`)")
+        return 1
+    if len(matches) > 1:
+        print(f"note: {len(matches)} routes share that identifier — showing all\n")
+    for e in matches:
+        print(format_entry(e))
+        print(f"  id:    {e['_id']}")
+        for field in ("run_id", "session_ref", "model", "cortex_md_sha"):
+            if e.get(field):
+                print(f"  {field + ':':<14}{e[field]}")
+        corrections = e.get("_corrections") or []
+        if not corrections:
+            print("  corrections: none — this route is as first logged")
+        else:
+            print(f"  corrections ({len(corrections)}, oldest first):")
+            for ev in corrections:
+                ts = (ev.get("ts") or "?")[:16].replace("T", " ")
+                kind = ev.get("event")
+                if kind == "reclassify":
+                    detail = f"tier → {ev.get('tier')}"
+                elif kind == "reroute":
+                    detail = f"corrected → {ev.get('user_correction')}"
+                else:
+                    detail = f"outcome → {ev.get('outcome')}"
+                note = ev.get("tier_audit_note") or ev.get("outcome_note")
+                print(f"    {ts}  {kind:<10} {detail}" + (f"  ({note})" if note else ""))
+            if e.get("tier_audit_original"):
+                print(f"  tier as first logged: {e['tier_audit_original']}")
+        print()
     return 0
 
 
@@ -606,17 +949,27 @@ def cmd_audit_tiers(args):
         if not args.reclassify_to:
             print("--reclassify requires --to <L1|L2|L3|L4>", file=sys.stderr)
             return 2
-        for e in entries:
-            if e.get("task_hash") == args.reclassify_hash:
-                original = e.get("tier")
-                e["tier_audit_original"] = original
-                e["tier"] = args.reclassify_to
-                e["tier_audit_note"] = args.note
-                LOG_PATH.write_text("".join(json.dumps(x) + "\n" for x in entries))
-                print(f"reclassified {args.reclassify_hash}: {original} → {args.reclassify_to}")
-                return 0
-        print(f"no entry with task_hash={args.reclassify_hash!r}")
-        return 1
+        # Reclassification is a judgement made after the fact, so it is recorded as
+        # its own event rather than edited into the observation. The route keeps the
+        # tier it was actually logged at; the audited tier is derived on read.
+        targets = [e for e in entries if e.get("task_hash") == args.reclassify_hash]
+        if not targets:
+            print(f"no entry with task_hash={args.reclassify_hash!r}")
+            return 1
+        if len(targets) > 1:
+            print(f"note: {len(targets)} routes share task_hash={args.reclassify_hash} "
+                  f"— reclassifying the most recent one")
+        target = targets[-1]
+        original = target.get("tier")
+        if original == args.reclassify_to:
+            print(f"{args.reclassify_hash} is already {args.reclassify_to} — nothing to do")
+            return 0
+        append_event("reclassify", target["_id"], outcome=target.get("outcome"),
+                     tier=args.reclassify_to, tier_audit_note=args.note)
+        print(f"reclassified {args.reclassify_hash}: {original} → {args.reclassify_to}")
+        print(f"  (appended as a correction event; the original row is unchanged — "
+              f"see `cortex history {args.reclassify_hash}`)")
+        return 0
 
     if not entries:
         print("cortex log is empty — nothing to audit")
@@ -660,6 +1013,166 @@ def cmd_audit_tiers(args):
     return 0
 
 
+def repo_source_path():
+    """The repo checkout this CLI was installed from, if it is reachable.
+
+    CORTEX_REPO wins. Otherwise walk up from the *resolved* running file: when the
+    install is a symlink into a checkout, resolving it lands inside the repo and
+    the checkout is found. When the install is a standalone copy there is no
+    checkout above it, and we return None — which is itself the finding.
+    """
+    env = os.environ.get("CORTEX_REPO")
+    if env:
+        cand = Path(env).expanduser() / "bin" / "cortex"
+        return cand if cand.exists() else None
+    running = Path(__file__).resolve()
+    for parent in running.parents:
+        if (parent / ".git").exists() and (parent / "bin" / "cortex").exists():
+            return parent / "bin" / "cortex"
+    return None
+
+
+def check_artifact_integrity(issues):
+    """Verify the cortex that automation actually runs matches the repo source.
+
+    Existence checks cannot catch this class of failure: a standalone copy at
+    ~/.claude/bin/cortex passes "the file is there and executable" perfectly while
+    being weeks behind the repo, which is exactly how one drift incident stayed
+    invisible. Compare content, and say how stale the copy is.
+    """
+    installed = BIN_PATH
+    running = Path(__file__).resolve()
+    if not installed.exists():
+        return  # the existence check already reported this as a FAIL
+
+    installed_hash = sha256_file(installed)
+    issues["pass"].append(f"cortex CLI on PATH: sha {installed_hash} ({installed})")
+
+    # Provenance: a symlink into a checkout stays in sync by construction; a plain
+    # copy cannot, and will silently diverge the next time the repo moves.
+    if installed.is_symlink():
+        issues["pass"].append(f"cortex CLI is linked to its source: {installed.resolve()}")
+    else:
+        issues["warn"].append(
+            f"cortex CLI at {installed} is a standalone copy, not a symlink to a checkout — "
+            f"it will drift silently on the next repo change (relink, or set CORTEX_REPO "
+            f"so doctor can compare content)")
+
+    # The doctor you are running may not be the cortex the hooks and the bot run.
+    if running != installed.resolve() and sha256_file(running) != installed_hash:
+        issues["warn"].append(
+            f"this doctor is running from {running} (sha {sha256_file(running)}), which differs "
+            f"from the cortex on PATH — you are auditing a different build than automation uses")
+
+    src = repo_source_path()
+    if src is None:
+        issues["warn"].append(
+            "repo source not reachable — cannot verify the installed CLI against it. "
+            "Set CORTEX_REPO=/path/to/cortex to enable the content check")
+        return
+    src_hash = sha256_file(src)
+    if src_hash == installed_hash:
+        issues["pass"].append(f"cortex CLI matches repo source ({src})")
+    else:
+        try:
+            age_days = (src.stat().st_mtime - installed.stat().st_mtime) / 86400
+            age = f"; installed copy is {age_days:.0f} day(s) older" if age_days > 0.5 else ""
+        except OSError:
+            age = ""
+        issues["fail"].append(
+            f"cortex CLI on PATH differs from repo source: installed sha {installed_hash} vs "
+            f"source sha {src_hash} ({src}){age} — automation is running stale code")
+
+    # Same failure mode for the skills cortex.md advertises.
+    repo_skills = src.parent.parent / "skills"
+    for skill in EXPECTED_SKILLS:
+        theirs, ours = repo_skills / skill / "SKILL.md", SKILLS_DIR / skill / "SKILL.md"
+        if not theirs.exists() or not ours.exists():
+            continue
+        if sha256_file(theirs) == sha256_file(ours):
+            issues["pass"].append(f"skill matches repo source: {skill}")
+        else:
+            issues["warn"].append(
+                f"skill {skill} differs from repo source (installed {sha256_file(ours)} vs "
+                f"source {sha256_file(theirs)}) — diff them: a personalised install is "
+                f"expected, an install missing flags the CLI now supports is drift")
+
+
+def probe_advisor(name, deep=False, timeout=None):
+    """Ask an advisor CLI to prove it responds. Returns (state, detail).
+
+    States: ok | dead | missing | unknown. `unknown` covers a probe that could not
+    complete in time — doctor must never hang on a third-party CLI, and reporting
+    "unknown" is honest where reporting "dead" would not be.
+    """
+    probes = ADVISOR_PROBES.get(name, {"liveness": ["--version"], "deep": None})
+    argv = probes["deep"] if deep else probes["liveness"]
+    if argv is None:
+        return "unknown", "no deep probe defined for this CLI"
+    timeout = timeout or (ADVISOR_DEEP_TIMEOUT if deep else ADVISOR_PROBE_TIMEOUT)
+    exe = shutil.which(name)
+    if not exe:
+        return "missing", "not on PATH"
+    try:
+        r = subprocess.run([exe] + argv, capture_output=True, text=True,
+                           timeout=timeout, stdin=subprocess.DEVNULL)
+    except subprocess.TimeoutExpired:
+        return "unknown", f"no response within {timeout}s"
+    except OSError as e:
+        return "dead", f"could not execute ({e})"
+    out = (r.stdout or "").strip() or (r.stderr or "").strip()
+    first = out.splitlines()[0][:100] if out else ""
+    if r.returncode != 0:
+        return "dead", f"exit {r.returncode}" + (f": {first}" if first else "")
+    if deep and not out:
+        return "dead", "exit 0 but no output — provider returned nothing"
+    return "ok", first or "responded"
+
+
+def check_advisors(issues, deep=False):
+    """cortex.md registers /ccg as a gate before irreversible actions. If both of
+    its providers are dead, that gate is decorative and nothing else would notice.
+    Probes run in parallel and each is individually time-boxed, so the worst case
+    is one timeout's wall clock rather than the sum of them.
+    """
+    specs = [(a.rstrip("?"), not a.endswith("?")) for a in ADVISORS]
+    if not specs:
+        return
+    mode = "deep" if deep else "liveness"
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(specs))) as pool:
+        results = list(pool.map(lambda s: (s[0], s[1]) + probe_advisor(s[0], deep=deep), specs))
+    live = 0
+    for name, required, state, detail in results:
+        if state == "ok":
+            live += 1
+            issues["pass"].append(f"advisor {name} responds ({mode}): {detail}")
+        elif state == "missing":
+            bucket = "warn" if required else "pass"
+            issues[bucket].append(
+                f"advisor {name} {'missing' if required else 'not installed (optional)'} — {detail}"
+                + (" — /ccg cannot use it" if required else ""))
+        elif state == "unknown":
+            issues["warn"].append(f"advisor {name} status unknown — {detail}")
+        else:
+            issues["warn"].append(f"advisor {name} is installed but not working — {detail}")
+    # Only escalate to FAIL when every required advisor is *definitively* absent or
+    # broken. A timeout is not evidence of death, so an inconclusive probe keeps this
+    # at warn level rather than failing doctor on a slow machine.
+    required_states = [st for _, req, st, _ in results if req]
+    if live == 0 and required_states and "unknown" not in required_states:
+        issues["fail"].append(
+            "no advisor CLI responded — /ccg is registered in cortex.md as a gate before "
+            "irreversible actions but has no working provider")
+    elif live == 0 and required_states:
+        issues["warn"].append(
+            "could not confirm any advisor CLI is working — /ccg may have no provider; "
+            "re-run doctor when the machine is less busy")
+    elif not deep:
+        issues["pass"].append(
+            "advisor probe was liveness only — run `cortex doctor --deep-probe` to confirm "
+            "the providers actually answer a prompt")
+
+
 def cmd_doctor(args):
     # Gate: in --weekly mode, skip silently if we ran within the gate window
     if args.weekly and DOCTOR_LAST_RUN.exists():
@@ -690,9 +1203,13 @@ def cmd_doctor(args):
     else:
         issues["fail"].append(f"cortex CLI missing: {BIN_PATH}")
 
+    # Check 2b — content integrity of the artifact actually in use. "It exists" is
+    # not the same as "it is the code we think is running".
+    check_artifact_integrity(issues)
+
     # Check 3 — cortex.md present
     if CORTEX_MD.exists():
-        issues["pass"].append(f"cortex.md present: {CORTEX_MD}")
+        issues["pass"].append(f"cortex.md present: {CORTEX_MD} (sha {cortex_md_sha()})")
     else:
         issues["warn"].append(f"cortex.md missing — copy templates/cortex.md to {CORTEX_MD}")
 
@@ -722,13 +1239,25 @@ def cmd_doctor(args):
         issues["pass"].append("proposals folder will be created on first /cortex-learn run")
 
     # Check 6 — log entries hygiene
-    entries = read_log()
+    raw = read_raw_log()
+    entries = collapse(raw)
     total = len(entries)
     bad = [e for e in entries if not e.get("class") or not e.get("system") or not e.get("pattern") or not e.get("tier")]
     if bad:
         issues["warn"].append(f"{len(bad)} log entry/entries missing required fields")
     elif entries:
         issues["pass"].append("all log entries have required fields")
+
+    # Check 6b — correction events that point at nothing. The only way to produce
+    # one is to edit the log by hand, which append-only semantics assume nobody does.
+    orphans = orphan_events(raw)
+    if orphans:
+        issues["warn"].append(
+            f"{len(orphans)} correction event(s) reference a route that is not in the log "
+            f"— the log may have been edited by hand; those corrections are being ignored")
+    n_events = len(raw) - total
+    if n_events:
+        issues["pass"].append(f"log: {total} routes + {n_events} correction event(s), append-only")
 
     # Check 7 — registry drift: a system registered in cortex.md but never
     # routed to is either dead weight in the registry or a blind spot.
@@ -760,6 +1289,12 @@ def cmd_doctor(args):
             )
         else:
             issues["pass"].append(f"outcome coverage: {marked}/{total} routes marked")
+
+    # Check 10 — advisor CLIs behind /ccg actually respond. Skipped only when
+    # explicitly turned off; the weekly path still runs the fast liveness probe,
+    # because a dead gate that nobody notices is the whole point of this check.
+    if not args.no_probe:
+        check_advisors(issues, deep=args.deep_probe)
 
     # Render
     n_fail = len(issues["fail"])
@@ -1214,6 +1749,9 @@ def build_parser():
     lg.add_argument("--system-reason", default=None)
     lg.add_argument("--project", default=None)
     lg.add_argument("--redirect-from", default=None)
+    lg.add_argument("--legs", action="append", default=None,
+                    help="a fan-out leg or work item (repeatable). Keeps the agent "
+                         "field to real specialists so it stays machine-readable")
     lg.add_argument("--confidence", default=None, choices=["high", "med", "low"],
                     help="overall confidence — seeds route/tier/spec if those aren't passed individually")
     lg.add_argument("--route-confidence", default=None, choices=["high", "med", "low"],
@@ -1222,6 +1760,10 @@ def build_parser():
                     help="confidence in the tier choice (low → flagged for audit-tiers review)")
     lg.add_argument("--spec-confidence", default=None, choices=["high", "med", "low"],
                     help="confidence in understanding the spec (low → clarify requirements before executing)")
+    lg.add_argument("--model", default=None,
+                    help="model this route was decided under (defaults to $CORTEX_MODEL / "
+                         "$CLAUDE_MODEL); routing behaviour is model-dependent, so a row "
+                         "without it can't be compared across models")
     lg.add_argument("--shown-inline", action="store_true", help=argparse.SUPPRESS)
     lg.set_defaults(func=cmd_log)
 
@@ -1234,11 +1776,16 @@ def build_parser():
     ll.add_argument("--system-reason", default=None)
     ll.add_argument("--project", default=None)
     ll.add_argument("--redirect-from", default=None)
+    ll.add_argument("--legs", action="append", default=None,
+                    help="a fan-out leg or work item (repeatable). Keeps the agent "
+                         "field to real specialists so it stays machine-readable")
     ll.add_argument("--confidence", default=None, choices=["high", "med", "low"],
                     help="overall confidence — seeds route/tier/spec if those aren't passed individually")
     ll.add_argument("--route-confidence", default=None, choices=["high", "med", "low"])
     ll.add_argument("--tier-confidence", default=None, choices=["high", "med", "low"])
     ll.add_argument("--spec-confidence", default=None, choices=["high", "med", "low"])
+    ll.add_argument("--model", default=None,
+                    help="model this route was decided under (defaults to $CORTEX_MODEL / $CLAUDE_MODEL)")
     ll.set_defaults(func=cmd_log_line)
 
     sh = sub.add_parser("show", help="display recent routes")
@@ -1266,6 +1813,10 @@ def build_parser():
     oc.add_argument("--note", default=None, help="optional free-text note")
     oc.set_defaults(func=cmd_outcome)
 
+    hi = sub.add_parser("history", help="show a route's full correction chain")
+    hi.add_argument("ref", help="a task_hash (from `show` / `audit-tiers`) or a route id")
+    hi.set_defaults(func=cmd_history)
+
     hn = sub.add_parser("hint", help="advisory: surface similar past routes for a task")
     hn.add_argument("task", help="one-line task description to find similar past routes for")
     hn.add_argument("--top", type=int, default=5, help="number of similar past tasks to consider (default 5)")
@@ -1292,6 +1843,11 @@ def build_parser():
     dr.add_argument("-v", "--verbose", action="store_true", help="show passing checks too")
     dr.add_argument("--weekly", action="store_true",
                     help=f"compact mode for SessionStart hook; gates to run at most once per {WEEKLY_GATE_DAYS} days")
+    dr.add_argument("--deep-probe", action="store_true",
+                    help="ask each advisor CLI to answer a real prompt (slower, costs tokens) "
+                         "instead of only checking that it executes")
+    dr.add_argument("--no-probe", action="store_true",
+                    help="skip the advisor CLI probes entirely")
     dr.set_defaults(func=cmd_doctor)
 
     ini = sub.add_parser("init", help="discover your existing systems (M1: scan) to prepare a personalized registry")

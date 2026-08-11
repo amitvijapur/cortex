@@ -1,0 +1,66 @@
+{
+  "_note": [
+    "Adherence gates, set by Amit 2026-08-08.",
+    "",
+    "HONESTY ABOUT PRE-REGISTRATION: these were chosen with the current values already",
+    "visible, so they are targets rather than pre-registered thresholds. Calling them",
+    "pre-registered would be a fiction. The mitigation is that floors are set to catch",
+    "REGRESSION rather than to certify the present state as good, so they are deliberately",
+    "below where the system sits today rather than tuned to just barely pass.",
+    "",
+    "FLOOR IS NOT TARGET. Conflating the two is how a scorecard starts failing constantly",
+    "and gets ignored, which is worse than having none. A floor says 'something broke'. A",
+    "target says 'this is where we want to get to'. Only floors gate.",
+    "",
+    "Only metrics the scorer marked safe to gate appear here. agent_field_populated is",
+    "excluded because it is knowably wrong on fan-out lines; hint_query_matched_task",
+    "because its threshold is a knob; session_routed because it has no single value by",
+    "construction, only a band."
+  ],
+
+  "floors": {
+    "tier_declared": {
+      "min": 0.98,
+      "current": 1.0,
+      "why": "Exact denominator, log-only. A drop here means the protocol stopped declaring tiers at all, which is a structural break rather than drift."
+    },
+    "confidence_declared": {
+      "min": 0.95,
+      "current": 0.991,
+      "why": "Exact, log-only. Note the values themselves are degenerate (zero 'low' across 141 routes), so this gates that the field is populated, NOT that it means anything."
+    },
+    "outcome_recorded": {
+      "min": 0.85,
+      "current": 0.895,
+      "why": "Exact, log-only. Set below current so ordinary variation does not trip it."
+    },
+    "outcome_recorded_live": {
+      "min": 0.55,
+      "current": 0.629,
+      "why": "Excludes the 38 bulk-backfilled rows, so it measures outcomes captured as observations. The weakest of the exact metrics, floored low to catch regression without being aspirational."
+    },
+    "outcome_is_observation": {
+      "min": 0.70,
+      "current": 0.775,
+      "why": "Transcript-derived, so it carries the coverage caveat: a fall in the ATTRIBUTION rate must not be read as a fall in adherence."
+    },
+    "hint_before_route": {
+      "min": 0.25,
+      "current": 0.286,
+      "why": "Floored just below current purely to detect further decay. 28.6% is not an acceptable state, it is the state, and the target below is where this needs to go."
+    }
+  },
+
+  "targets": {
+    "hint_before_route": {
+      "goal": 0.60,
+      "current": 0.286,
+      "why": "Protocol step 3 says run hint before routing. Measured per route it happens 28.6% of the time; the per-session reading of 64% is a different question and does not discharge this one. 60% is a deliberate half-measure: some routes legitimately ride an earlier hint in the same session, so 100% would be the wrong goal."
+    },
+    "outcome_recorded_live": {
+      "goal": 0.85,
+      "current": 0.629,
+      "why": "Every backfilled outcome is a label invented after the fact. Getting this up is what makes the outcome variable worth anything."
+    }
+  }
+}

@@ -15,3 +15,10 @@ __pycache__/
 *.swp
 .idea/
 .vscode/
+
+# Eval harness outputs (results + unlabelled worksheets) live in the state dir
+eval/out/
+
+# Build output left behind by the M1 UI branch (source is tracked on
+# feat/cortex-command; only dist/ + node_modules survive a branch switch)
+command/
