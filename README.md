@@ -56,7 +56,7 @@ Routing is the harder problem. When a task lands, *"which LLMs should debate thi
 
 Cortex answers those before any model touches the work, which demotes the council to one possible answer rather than the whole architecture.
 
-Then it remembers. Every route is logged with its reasoning and its outcome, which is what lets it surface your repeating patterns, bias future routes toward what actually shipped, and show you where you have been quietly overspending effort.
+Then it remembers. Every route is logged with its reasoning and its outcome, which surfaces your repeating patterns, biases future routes toward what shipped, and shows you where you have been overspending effort.
 
 ---
 
@@ -120,18 +120,18 @@ It fires at most once every 7 days: `[cortex] all green (73 routes, Phase 3)`, o
 
 Cortex loads every session, so it is worth knowing the bill.
 
-The shipped `templates/cortex.md` is **about 6,000 tokens** and does not grow on its own. What grows is the registry you put underneath it, and it grows faster than you notice. Mine reached 19,000 tokens before I measured it. Checking each entry against the routing log showed eight had never been reached for in 154 routes.
+The shipped `templates/cortex.md` is **about 6,000 tokens** and does not grow on its own. What grows is the registry underneath it, faster than you notice. Mine reached 19,000 before I measured it, and eight of its entries had never been reached for in 154 routes.
 
 <p align="center"><img src="assets/context-cost.svg" alt="What loads before you type: the framework, your registry, and your agent roster, with cold registry detail lifting out to on-demand" width="880"></p>
 
 **The rule that came out of that:** split the registry by temperature, in one specific place.
 
-- **The Decision Shortcuts table stays loaded.** It is the index. One line per task type, naming the system and when to reach for it.
+- **The Decision Shortcuts table stays loaded.** It is the index: one line per task type, naming the system and when to reach for it.
 - **Per-system detail loads on demand.** Pattern tables, setup notes, caveats.
 
 Getting this backwards is the trap. Moving the shortcut rows out is not a saving, it is an amnesia bug: the router stops knowing the system exists, so it never routes there, so the entry looks unused, so you delete it.
 
-One thing worth measuring rather than assuming. On a populated setup the framework is rarely what dominates, because a few hundred agent and skill descriptions outweigh `cortex.md` several times over. Count those first.
+The framework is rarely what dominates anyway. A few hundred agent and skill descriptions outweigh `cortex.md` several times over, so count those first.
 
 ---
 
@@ -171,9 +171,7 @@ OMC > ralplan > Backend Architect @ L3
 OMC > /team > [Frontend Developer ∥ Stripe skill ∥ Accessibility Auditor] → Software Architect reconciler @ L3
 ```
 
-Declaring it up front is the whole point, because a silent router cannot be corrected. If the call looks wrong you say so, and `/cortex-reroute` records it. That correction is the highest-quality signal the log ever gets.
-
-L1 trivia (one-line edits, file reads, lookups) skips all of this.
+Declaring it up front is the whole point: a silent router cannot be corrected. If the call looks wrong you say so, `/cortex-reroute` records it, and that correction is the highest-quality signal the log ever gets. L1 trivia skips all of this.
 
 ### The tier system
 
@@ -202,7 +200,7 @@ Three questions. All "no" means **L2**:
 2. **Genuine uncertainty** — is the solution unclear, or do I just need to type it out?
 3. **Non-trivial verification** — does proving correctness take more than one read-through?
 
-This exists because the data said so. My first 36 routes came out at roughly **67% L3**, and an audit showed most of it was reflexive bumping on "customer-facing" or "touches more than two files". `cortex audit-tiers` lists every L3 and L4 with its stated reasoning and actual outcome, so you can go back and ask whether L2 would have done. Reclassifying preserves the original tier for the record.
+This exists because the data said so. My first 36 routes came out at roughly **67% L3**, mostly reflexive bumping on "customer-facing" or "touches more than two files". `cortex audit-tiers` lists every L3 and L4 with its reasoning and outcome so you can ask whether L2 would have done; reclassifying preserves the original for the record.
 
 ### Shape vs depth
 
@@ -210,7 +208,7 @@ The mistake I kept making was treating multi-agent work as an *upgrade*, somethi
 
 <p align="center"><img src="assets/fan-out.svg" alt="A cross-domain task fans out to parallel specialists, then converges through a reconciler into one result" width="880"></p>
 
-Two or more independent domains means parallel specialists plus a reconciler is the *correct* shape, at whatever tier the work warrants. A well-scoped L2 fan-out is normal. Running a cross-domain task through one generalist is a routing bug, not a saving. For high-stakes fan-outs the reconciler becomes a full [council](#ccg-the-council-as-one-tool).
+Two or more independent domains means parallel specialists plus a reconciler is the *correct* shape, at whatever tier the work warrants; a well-scoped L2 fan-out is normal. Running a cross-domain task through one generalist is a routing bug, not a saving. High-stakes fan-outs upgrade the reconciler to a full [council](#ccg-the-council-as-one-tool).
 
 ### Three confidences
 
@@ -222,13 +220,11 @@ Confidence is not one number. Three things can be independently shaky, each with
 | `--tier-confidence` | Is this really L3, or would L2 have done? | flagged for the next `audit-tiers` pass |
 | `--spec-confidence` | Do I actually understand what you want? | **stop before executing** and go interview |
 
-That last one is the strongest trigger in the system. The failure it catches is *high route, high tier, low spec*: **"I know exactly which tool to use, I'm just not sure what you asked for."** That is the state in which agents confidently build the wrong thing.
+That last one is the strongest trigger in the system. It catches *high route, high tier, low spec*: **"I know exactly which tool to use, I'm just not sure what you asked for."** That is the state in which agents confidently build the wrong thing.
 
 ### CCG: the council, as one tool
 
-CCG is Claude + Codex + Gemini. It is the LLM Council pattern, alive and well, demoted from *the architecture* to *one tool the router can reach for*. It fires automatically on pre-plan checks at L3/L4, irreversible actions (migrations, prod pushes, payments, auth rewrites), security audits, conflicting outputs from two prior agents, and any sign of **your** uncertainty, which is the strongest trigger there is.
-
-It is skipped on routine work. Three models cost three models' worth of tokens.
+CCG is Claude + Codex + Gemini: the LLM Council pattern, alive and well, demoted from *the architecture* to *one tool the router can reach for*. It fires on pre-plan checks at L3/L4, irreversible actions (migrations, prod pushes, payments, auth rewrites), security audits, conflicting outputs from two prior agents, and any sign of **your** uncertainty, which is the strongest trigger there is. It is skipped on routine work, because three models cost three models' worth of tokens.
 
 ---
 
@@ -254,7 +250,7 @@ The log is **append-only**. A route writes one line; the outcome is a *second* l
 
 <p align="center"><img src="assets/append-only-log.svg" alt="Three log lines for one route: the original route, an outcome, and a correction, collapsed into a derived current view" width="880"></p>
 
-Corrections work the same way. The current state of a route is *derived* by replaying its events, so the record of having been wrong survives being corrected, and `cortex history <event_id>` prints the chain. If a correction overwrote the original row, the log would only show what you eventually decided, never what the router first proposed. The gap between those two is the only training signal worth anything.
+Corrections work the same way, so a route's current state is *derived* by replaying its events and `cortex history <event_id>` prints the chain. Had corrections overwritten the original row, the log would only show what you eventually decided, never what the router first proposed. That gap is the only training signal worth anything.
 
 <p align="center"><img src="assets/self-learning.svg" alt="The self-learning loop: route, execute, outcome, log, hint; every task sharpens the next route" width="880"></p>
 
@@ -264,10 +260,10 @@ Phases activate on data thresholds, not on a calendar. All four are active:
 |---|---|---|
 | **1 · Visibility** | day one | Every route logged with full reasoning. `/cortex-log` replays it. |
 | **2 · Pattern surfacing** | ~20 routes | `cortex learn` finds `(class, system, pattern)` tuples repeating ≥3× and proposes them as shortcuts. |
-| **3 · Similarity bias** | ~40+ routes | `cortex hint` surfaces similar past routes scored by outcome. **Advisory — it informs the call, it does not make it.** |
+| **3 · Similarity bias** | ~40+ routes | `cortex hint` surfaces similar past routes scored by outcome. **Advisory: it informs the call, it does not make it.** |
 | **4 · Outcome capture** | day one | Correction triggers append an event linking the replacement, leaving the original decision on the record. |
 
-Two rules hold it together. **Approve, don't auto-apply** — the learning layer proposes and you dispose, because a router that rewrites its own rules without asking is one you cannot trust. And **correction beats prediction** — a negative hint score means past attempts at that route failed, which is worth more than any similarity heuristic because it is ground truth you gave it.
+Two rules hold it together. **Approve, don't auto-apply**: the learning layer proposes and you dispose, because a router that rewrites its own rules without asking is one you cannot trust. **Correction beats prediction**: a negative hint score means past attempts at that route failed, which beats any similarity heuristic because it is ground truth you gave it.
 
 ---
 
@@ -277,7 +273,7 @@ A router that describes its own reasoning is easy to build and easy to fool. The
 
 <p align="center"><img src="assets/evidence-layer.svg" alt="An append-only log read by three independent checks, each returning a verdict, with failures feeding back as fixes" width="880"></p>
 
-**Adherence scoring.** The protocol says to declare a tier, run `hint` before routing, and record an outcome. Whether that happens is measurable. `score_adherence.py --check` scores the log against floors in [`eval/adherence-thresholds.json`](eval/adherence-thresholds.json) and exits non-zero on a breach.
+**Adherence scoring.** The protocol says to declare a tier, run `hint` before routing, and record an outcome. `score_adherence.py --check` scores the log against floors in [`eval/adherence-thresholds.json`](eval/adherence-thresholds.json) and exits non-zero on a breach.
 
 **Routing consistency.** `route_eval.py` puts a task to a headless session and asserts a property of the routing line that comes back:
 
@@ -290,13 +286,13 @@ A router that describes its own reasoning is easy to build and easy to fool. The
 
 Paired cases always get their own session, because an earlier answer in a shared one anchors a later answer, which is exactly what a paired comparison must not allow. `CORTEX_HOME` is redirected to a sandbox so a model dutifully following the protocol cannot append test routes into the real log.
 
-**Retrieval evaluation.** Agent selection is scored on a sealed train/test split, with hard negatives drawn from the same division as the target. Random negatives flatter retrieval, since telling a security agent from a marketing agent is trivial. Same-division confusion is where it actually fails.
+**Retrieval evaluation.** Agent selection is scored on a sealed train/test split, with hard negatives drawn from the same division as the target. Random negatives flatter retrieval, since telling a security agent from a marketing agent is trivial; same-division confusion is where it actually fails.
 
 ### What this does not establish
 
-These tests answer *"did something break?"* They do not answer *"was that a good route?"* There is no oracle for routing quality here, and building one needs labelled data that does not exist yet. A suite that quietly grew into a quality claim would be exactly the false assurance this was built to remove.
+These tests answer *"did something break?"*, not *"was that a good route?"* There is no oracle for routing quality here, and building one needs labelled data that does not exist yet. A suite that quietly grew into a quality claim would be exactly the false assurance this was built to remove.
 
-Two more limits worth stating plainly. **The floors are targets, not pre-registrations** — they were chosen with the current numbers already visible, which the thresholds file admits in its own header. They sit *below* where the system runs today, so they detect regression rather than certifying the present as good. And **a floor is not a goal**: `hint_before_route` has a floor of 25% and a target of 60%, and the floor is not an endorsement of 29%.
+**The floors are targets, not pre-registrations.** They were chosen with the current numbers visible, which the thresholds file admits in its own header, and they sit *below* where the system runs today so they catch regression rather than certifying the present as good. **A floor is not a goal** either: `hint_before_route` floors at 25% against a target of 60%, and 25% is not an endorsement of 29%.
 
 ### What the harness has rejected
 
