@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 320" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+<defs>
+  <radialGradient id="src" cx="0.5" cy="0.5" r="0.5">
+    <stop offset="0" stop-color="#eaf5ff"/><stop offset="1" stop-color="#4a9eff"/>
+  </radialGradient>
+  <radialGradient id="vign" cx="0.14" cy="0.5" r="0.95">
+    <stop offset="0" stop-color="#12233f"/><stop offset="1" stop-color="#0b1220"/>
+  </radialGradient>
+  <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+    <feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="soft" x="-140%" y="-140%" width="380%" height="380%"><feGaussianBlur stdDeviation="9"/></filter>
+  <marker id="arw" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#63b3ed"/></marker>
+  <marker id="arwd" viewBox="0 0 10 10" refX="7.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#4a9eff" opacity="0.8"/></marker>
+</defs>
+<rect width="1240" height="320" rx="18" fill="url(#vign)"/>
+<rect x="150.0" y="124.0" width="148.0" height="56.0" rx="10.0" fill="#4a9eff" fill-opacity="0.42" stroke="#4a9eff" stroke-opacity="0.4"/>
+<rect x="298.0" y="124.0" width="148.0" height="56.0" rx="10.0" fill="#4a9eff" fill-opacity="0.26" stroke="#4a9eff" stroke-opacity="0.4"/>
+<rect x="446.0" y="124.0" width="644.0" height="56.0" rx="10.0" fill="#4a9eff" fill-opacity="0.12" stroke="#4a9eff" stroke-opacity="0.4"/>
+<text x="224.0" y="92.0" text-anchor="middle" font-size="14" font-weight="600" fill="#dce8f7">The framework</text>
+<text x="224.0" y="110.0" text-anchor="middle" font-size="12" font-weight="500" fill="#7f97b8">~6k tokens</text>
+<text x="372.0" y="92.0" text-anchor="middle" font-size="14" font-weight="600" fill="#dce8f7">Your registry</text>
+<text x="372.0" y="110.0" text-anchor="middle" font-size="12" font-weight="500" fill="#7f97b8">grows quietly</text>
+<text x="768.0" y="92.0" text-anchor="middle" font-size="14" font-weight="600" fill="#dce8f7">Your agents &amp; skills</text>
+<text x="768.0" y="110.0" text-anchor="middle" font-size="12" font-weight="500" fill="#7f97b8">usually the largest</text>
+<text x="150.0" y="52.0" font-size="15" font-weight="700" fill="#dce8f7">Loaded every session</text>
+<path d="M 372.0 180.0 C 372.0 206.0 372.0 206.0 372.0 228.0" fill="none" stroke="#4a9eff" stroke-opacity="0.55" stroke-width="1.9" stroke-dasharray="5 4" marker-end="url(#arwd)"/>
+<rect x="298.0" y="232.0" width="148.0" height="44.0" rx="10.0" fill="#4a9eff" fill-opacity="0.06" stroke="#4a9eff" stroke-opacity="0.35" stroke-dasharray="5 4"/>
+<text x="372.0" y="259.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#9dcbff">read on demand</text>
+<text x="470.0" y="252.0" font-size="13" font-weight="600" fill="#dce8f7">Per-system detail splits out.</text>
+<text x="470.0" y="270.0" font-size="12" font-weight="500" fill="#7f97b8">The Decision Shortcuts index stays loaded, or the router forgets the system exists.</text>
+<text x="1090.0" y="302.0" text-anchor="end" font-size="12.5" font-weight="500" fill="#5f7ba3" font-style="italic">measure this before optimising it</text>
+</svg>
