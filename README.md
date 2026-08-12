@@ -188,43 +188,17 @@ Tier is a **depth** decision: how much machinery does correctness actually requi
 
 **The default is L2.** Blast radius, ambiguity, stakes, novelty, reversibility and how certain you sounded push it up or down. Override in plain language: *"go light"* forces L1, *"be thorough"* L3, *"ultrathink"* L4, and *"bump it"* / *"drop it"* move one step.
 
-### The anti-inflation rule
+### Calibration
 
-The rule I most needed and least wanted.
+Three rules do most of the work. The reasoning behind each is in **[docs/routing.md](docs/routing.md)**.
 
-**L3 must justify itself against L2, not the other way around.** Picking L3 because the work "feels important" or "is customer-facing" is inflation. You have to name a concrete failure mode L2 would produce, like *"L2 would skip the verifier pass and this touches auth"*.
+**L3 must justify itself against L2**, not the other way around. Picking L3 because work "feels important" is inflation; you have to name a failure mode L2 would actually produce. My first 36 routes came out at **67% L3**, and an audit showed most of that was reflex.
 
-Three questions. All "no" means **L2**:
+**Shape and tier are orthogonal.** Tier is depth; shape is how many independent disciplines a task touches. Two or more means parallel specialists plus a reconciler, at whatever tier the work warrants. Running a cross-domain task through one generalist is a routing bug, not a saving.
 
-1. **Cost of being wrong** — does shipping this broken cost money, trust, or prod?
-2. **Genuine uncertainty** — is the solution unclear, or do I just need to type it out?
-3. **Non-trivial verification** — does proving correctness take more than one read-through?
+**Confidence is three numbers.** Route, tier and spec fail independently, and the strongest trigger in the system is *high route, high tier, low spec*: **"I know exactly which tool to use, I'm just not sure what you asked for."** That is when agents confidently build the wrong thing.
 
-This exists because the data said so. My first 36 routes came out at roughly **67% L3**, mostly reflexive bumping on "customer-facing" or "touches more than two files". `cortex audit-tiers` lists every L3 and L4 with its reasoning and outcome so you can ask whether L2 would have done; reclassifying preserves the original for the record.
-
-### Shape vs depth
-
-The mistake I kept making was treating multi-agent work as an *upgrade*, something you escalate to when a task feels serious. **Shape and tier are orthogonal.** Tier is depth; shape is how many independent disciplines a task touches.
-
-<p align="center"><img src="assets/fan-out.svg" alt="A cross-domain task fans out to parallel specialists, then converges through a reconciler into one result" width="880"></p>
-
-Two or more independent domains means parallel specialists plus a reconciler is the *correct* shape, at whatever tier the work warrants; a well-scoped L2 fan-out is normal. Running a cross-domain task through one generalist is a routing bug, not a saving. High-stakes fan-outs upgrade the reconciler to a full [council](#ccg-the-council-as-one-tool).
-
-### Three confidences
-
-Confidence is not one number. Three things can be independently shaky, each with its own remedy:
-
-| Dimension | The question it answers | If `low` |
-|---|---|---|
-| `--route-confidence` | Am I picking the right system and pattern? | widen `cortex hint`, or cross-check with a council |
-| `--tier-confidence` | Is this really L3, or would L2 have done? | flagged for the next `audit-tiers` pass |
-| `--spec-confidence` | Do I actually understand what you want? | **stop before executing** and go interview |
-
-That last one is the strongest trigger in the system. It catches *high route, high tier, low spec*: **"I know exactly which tool to use, I'm just not sure what you asked for."** That is the state in which agents confidently build the wrong thing.
-
-### CCG: the council, as one tool
-
-CCG is Claude + Codex + Gemini: the LLM Council pattern, alive and well, demoted from *the architecture* to *one tool the router can reach for*. It fires on pre-plan checks at L3/L4, irreversible actions (migrations, prod pushes, payments, auth rewrites), security audits, conflicting outputs from two prior agents, and any sign of **your** uncertainty, which is the strongest trigger there is. It is skipped on routine work, because three models cost three models' worth of tokens.
+[CCG](docs/routing.md#ccg-the-council-as-one-tool), the Claude + Codex + Gemini council, is one tool the router reaches for on irreversible actions, security audits, and any sign of your own uncertainty. It is the LLM Council pattern demoted from the architecture to a tool.
 
 ---
 
@@ -236,16 +210,14 @@ The log is **append-only**. A route writes one line; the outcome is a *second* l
 
 ```jsonc
 // written when the routing line is declared
-{"event": "route", "event_id": "ev_7a8d080fc1f5", "ts": "2026-07-14T09:12:04Z",
- "task": "Refactor auth middleware to use the new session store",
- "class": "build", "system": "OMC", "pattern": "ralplan",
- "agent": "Backend Architect", "tier": "L3",
+{"event": "route", "event_id": "ev_7a8d080fc1f5", "task": "Refactor auth middleware",
+ "class": "build", "system": "OMC", "pattern": "ralplan", "tier": "L3",
  "tier_reason": "Touches auth; L2 would skip the verifier pass",
  "route_confidence": "high", "tier_confidence": "med", "spec_confidence": "high"}
 
-// appended when the task ends — a separate line, pointing back at the route
+// appended when the task ends: a separate line, pointing back at the route
 {"event": "outcome", "event_id": "ev_3a664b902d4d", "ref": "ev_7a8d080fc1f5",
- "outcome": "shipped", "outcome_note": "landed behind a flag"}
+ "outcome": "shipped"}
 ```
 
 <p align="center"><img src="assets/append-only-log.svg" alt="Three log lines for one route: the original route, an outcome, and a correction, collapsed into a derived current view" width="880"></p>
@@ -288,20 +260,11 @@ Paired cases always get their own session, because an earlier answer in a shared
 
 **Retrieval evaluation.** Agent selection is scored on a sealed train/test split, with hard negatives drawn from the same division as the target. Random negatives flatter retrieval, since telling a security agent from a marketing agent is trivial; same-division confusion is where it actually fails.
 
-### What this does not establish
+### The limits
 
-These tests answer *"did something break?"*, not *"was that a good route?"* There is no oracle for routing quality here, and building one needs labelled data that does not exist yet. A suite that quietly grew into a quality claim would be exactly the false assurance this was built to remove.
+These tests answer *"did something break?"*, not *"was that a good route?"* There is no oracle for routing quality here. The floors are targets rather than pre-registrations too, since they were set with the current numbers already visible.
 
-**The floors are targets, not pre-registrations.** They were chosen with the current numbers visible, which the thresholds file admits in its own header, and they sit *below* where the system runs today so they catch regression rather than certifying the present as good. **A floor is not a goal** either: `hint_before_route` floors at 25% against a target of 60%, and 25% is not an endorsement of 29%.
-
-### What the harness has rejected
-
-A test suite that has never contradicted its author is decoration. Two things this one killed:
-
-- **A tuned BM25F ranker for agent retrieval.** It beat the baseline on the development set, then lost on held-out data. The corpus hygiene fixes shipped; the ranker did not.
-- **A capability-confinement layer for the intake worker.** Built, then removed once the evidence showed it defended against an adversary that does not exist for a personal tool, while breaking credentials and plugin hooks. The correctness half survived: approvals are bound to a content hash, and a build reports success only when the target file actually changed, not when the model says it did.
-
-It has also caught its own author. Changing a default ranker silently rewrote what every evaluation row was measuring, because no result recorded which ranker produced it.
+The harness has also killed things I had already built: a BM25F ranker that won on the development set and lost on held-out data, and a confinement layer that turned out to defend against an adversary who does not exist. A suite that has never contradicted its author is decoration. **[The full accounting](docs/evaluation.md).**
 
 ---
 
@@ -440,6 +403,9 @@ cortex/
 │   │                      replay, retrieval evaluation, CLI tests
 │   ├── README.md        ← what each one does and does not establish
 │   └── adherence-thresholds.json
+├── docs/
+│   ├── routing.md       ← calibration rules and the reasoning behind them
+│   └── evaluation.md    ← what the checks prove, and what they have rejected
 ├── skills/              ← /cortex-log, /cortex-learn, /cortex-reroute, /cortex-init
 ├── templates/cortex.md  ← the framework, registry stubbed
 ├── examples/cortex.md   ← a populated registry, for reference
