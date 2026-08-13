@@ -14,7 +14,7 @@ These tests answer *"did something break?"*, not *"was that a good route?"* Ther
 
 ## What the harness has rejected
 
-Two changes were built, evaluated, and then dropped on the evidence:
+A test suite that has never contradicted its author is decoration. Two changes were built, evaluated, and then dropped on the evidence:
 
 - **A tuned BM25F ranker for agent retrieval.** It beat the baseline on the development set, then lost on held-out data. The corpus hygiene fixes shipped; the ranker did not.
 - **A capability-confinement layer for the intake worker.** Built, then removed once the evidence showed it defended against an adversary that does not exist for a personal tool, while breaking credentials and plugin hooks. The correctness half survived: approvals are bound to a content hash, and a build reports success only when the target file actually changed, not when the model says it did.
