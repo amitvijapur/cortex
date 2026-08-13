@@ -6,7 +6,7 @@
 
 **A meta-router for coding agents.** It sits above every workflow system in your stack and decides, per task, which system runs, which specialist drives, and how much effort the work deserves. Then it logs the decision, learns from the outcome, and ships the checks that tell you whether any of that is actually happening.
 
-<sub>Built for **Claude Code** · runs on **Cursor, Codex, Gemini CLI, Aider & Windsurf** too — [see how ↓](#using-cortex-with-other-agents)</sub>
+<sub>Built for **Claude Code** · runs on **Cursor, Codex, Gemini CLI, Aider & Windsurf** too. [See how ↓](#using-cortex-with-other-agents)</sub>
 
 <img src="assets/cortex-hero.png" alt="Cortex routes each task to the right system" width="820" />
 
@@ -20,7 +20,7 @@
 
 <p align="center"><img src="assets/stack-overview.svg" alt="A task enters the routing protocol and is dispatched to orchestrators, specialists, quality gates, domain models, or infrastructure" width="880"></p>
 
-Cortex does not replace your workflow systems. It picks between them, attaches the right specialist, declares its reasoning out loud, and gets better at it over time.
+Cortex does not replace your workflow systems. It picks between them, attaches a specialist, declares the reasoning before execution, and records the outcome.
 
 ---
 
@@ -43,20 +43,18 @@ Cortex does not replace your workflow systems. It picks between them, attaches t
 
 ## Why this exists
 
-Multi-LLM voting — [Karpathy's LLM Council](https://github.com/karpathy/llm-council), OpenRouter consensus, and friends — is a clean primitive. Several models answer, they cross-review, a chairman synthesizes. It works.
+An agent with many tools available makes the same decision repeatedly, and usually badly: which tool, at what effort, with which specialist. That decision is normally implicit, unlogged, and impossible to audit.
 
-After running my own version of it daily for months, I came to think it is **one tool, not the system.**
+Multi-model voting answers a narrower question, which is how to check a single answer. It does not decide whether the task needed three models, a phase-based planner, or a one-line edit.
 
-Routing is the harder problem. When a task lands, *"which LLMs should debate this?"* is rarely the first question worth asking. These are:
+Cortex answers four questions before any model touches the work:
 
-- What **kind** of work is this, and what **effort tier** does it actually deserve? A one-line fix and a payments migration should not get the same machinery.
-- Which **workflow system** owns this shape, and which **specialist** should drive?
-- Should this **fan out** to parallel specialists, because it spans more than one discipline?
-- And only then: does this deserve a **council** at all? Most tasks do not.
+- What **kind** of work is this, and what **effort tier** does it deserve? A one-line fix and a payments migration should not get the same machinery.
+- Which **workflow system** owns this shape, and which **specialist** drives?
+- Does it span enough independent disciplines to need **parallel specialists**?
+- Does it need a **multi-model council** at all? Most tasks do not.
 
-Cortex answers those before any model touches the work, which demotes the council to one possible answer rather than the whole architecture.
-
-Then it remembers. Every route is logged with its reasoning and its outcome, which surfaces your repeating patterns, biases future routes toward what shipped, and shows you where you have been overspending effort.
+Every decision is logged with its reasoning and, when the task ends, its outcome. That log surfaces repeating patterns, weights future routes toward what shipped, and exposes where effort is being overspent.
 
 ---
 
@@ -120,7 +118,7 @@ It fires at most once every 7 days: `[cortex] all green (73 routes, Phase 3)`, o
 
 Cortex loads every session, so it is worth knowing the bill.
 
-The shipped `templates/cortex.md` is **about 6,000 tokens** and does not grow on its own. What grows is the registry underneath it, faster than you notice. Mine reached 19,000 before I measured it, and eight of its entries had never been reached for in 154 routes.
+The shipped `templates/cortex.md` is **about 6,000 tokens** and does not grow on its own. What grows is the registry underneath it, and it grows unnoticed because nothing forces a review. One registry reached 19,000 tokens, at which point an audit found eight entries that had never been routed to across 154 logged decisions.
 
 <p align="center"><img src="assets/context-cost.svg" alt="What loads before you type: the framework, your registry, and your agent roster, with cold registry detail lifting out to on-demand" width="880"></p>
 
@@ -129,7 +127,7 @@ The shipped `templates/cortex.md` is **about 6,000 tokens** and does not grow on
 - **The Decision Shortcuts table stays loaded.** It is the index: one line per task type, naming the system and when to reach for it.
 - **Per-system detail loads on demand.** Pattern tables, setup notes, caveats.
 
-Getting this backwards is the trap. Moving the shortcut rows out is not a saving, it is an amnesia bug: the router stops knowing the system exists, so it never routes there, so the entry looks unused, so you delete it.
+Splitting it the other way round fails in a specific way. Move the shortcut rows out and the router stops knowing the system exists, so it never routes there, so the entry looks unused, so it gets deleted.
 
 The framework is rarely what dominates anyway. A few hundred agent and skill descriptions outweigh `cortex.md` several times over, so count those first.
 
@@ -171,7 +169,7 @@ OMC > ralplan > Backend Architect @ L3
 OMC > /team > [Frontend Developer ∥ Stripe skill ∥ Accessibility Auditor] → Software Architect reconciler @ L3
 ```
 
-Declaring it up front is the whole point: a silent router cannot be corrected. If the call looks wrong you say so, `/cortex-reroute` records it, and that correction is the highest-quality signal the log ever gets. L1 trivia skips all of this.
+The line is declared before execution so it can be corrected. If the call looks wrong, `/cortex-reroute` records what was wanted instead, and that correction carries more signal than any other row in the log. L1 trivia skips all of this.
 
 ### The tier system
 
@@ -192,13 +190,13 @@ Tier is a **depth** decision: how much machinery does correctness actually requi
 
 Three rules do most of the work. The reasoning behind each is in **[docs/routing.md](docs/routing.md)**.
 
-**L3 must justify itself against L2**, not the other way around. Picking L3 because work "feels important" is inflation; you have to name a failure mode L2 would actually produce. My first 36 routes came out at **67% L3**, and an audit showed most of that was reflex.
+**High effort must justify itself against standard effort**, not the other way around. Picking L3 because work feels important is inflation. The route has to name a failure mode L2 would actually produce. In one audit, the first 36 logged routes came out at **67% L3**, and most of that was reflex.
 
-**Shape and tier are orthogonal.** Tier is depth; shape is how many independent disciplines a task touches. Two or more means parallel specialists plus a reconciler, at whatever tier the work warrants. Running a cross-domain task through one generalist is a routing bug, not a saving.
+**Depth and breadth are separate decisions.** Tier sets how much rigour a task gets. Shape sets how many independent disciplines it touches. Two or more disciplines means parallel specialists and a reconciler, at whatever tier the work warrants. Running a cross-domain task through one generalist is a routing bug, not a saving.
 
-**Confidence is three numbers.** Route, tier and spec fail independently, and the strongest trigger in the system is *high route, high tier, low spec*: **"I know exactly which tool to use, I'm just not sure what you asked for."** That is when agents confidently build the wrong thing.
+**Confidence is recorded as three values, not one.** Picking the right system, picking the right tier, and understanding the request all fail independently. The strongest trigger in the system is high confidence on the first two and low on the third, which is the state where an agent knows exactly which tool to use and builds the wrong thing with it.
 
-[CCG](docs/routing.md#ccg-the-council-as-one-tool), the Claude + Codex + Gemini council, is one tool the router reaches for on irreversible actions, security audits, and any sign of your own uncertainty. It is the LLM Council pattern demoted from the architecture to a tool.
+[CCG](docs/routing.md#ccg-the-council-as-one-tool), a tri-model council of Claude, Codex and Gemini, is one tool the router reaches for on irreversible actions, security audits, and any sign of user uncertainty. It is not a default, because three models cost three models' worth of tokens.
 
 ---
 
@@ -222,7 +220,7 @@ The log is **append-only**. A route writes one line; the outcome is a *second* l
 
 <p align="center"><img src="assets/append-only-log.svg" alt="Three log lines for one route: the original route, an outcome, and a correction, collapsed into a derived current view" width="880"></p>
 
-Corrections work the same way, so a route's current state is *derived* by replaying its events and `cortex history <event_id>` prints the chain. Had corrections overwritten the original row, the log would only show what you eventually decided, never what the router first proposed. That gap is the only training signal worth anything.
+Corrections work the same way, so a route's current state is *derived* by replaying its events, and `cortex history <event_id>` prints the chain. Overwriting the original row would leave only the final decision on record, not what the router first proposed. The difference between those two is what the learning layer reads.
 
 <p align="center"><img src="assets/self-learning.svg" alt="The self-learning loop: route, execute, outcome, log, hint; every task sharpens the next route" width="880"></p>
 
@@ -241,7 +239,7 @@ Two rules hold it together. **Approve, don't auto-apply**: the learning layer pr
 
 ## Checking the router
 
-A router that describes its own reasoning is easy to build and easy to fool. The reasoning is generated text, so it can stay articulate while the behaviour underneath drifts. `eval/` makes the difference observable.
+A declared routing line is generated text, so it can stay articulate while the behaviour underneath drifts. `eval/` measures the difference between what the protocol says and what the router does.
 
 <p align="center"><img src="assets/evidence-layer.svg" alt="An append-only log read by three independent checks, each returning a verdict, with failures feeding back as fixes" width="880"></p>
 
@@ -264,19 +262,19 @@ Paired cases always get their own session, because an earlier answer in a shared
 
 These tests answer *"did something break?"*, not *"was that a good route?"* There is no oracle for routing quality here. The floors are targets rather than pre-registrations too, since they were set with the current numbers already visible.
 
-The harness has also killed things I had already built: a BM25F ranker that won on the development set and lost on held-out data, and a confinement layer that turned out to defend against an adversary who does not exist. A suite that has never contradicted its author is decoration. **[The full accounting](docs/evaluation.md).**
+The harness has rejected two changes that were already built: a BM25F ranker that won on the development set and lost on held-out data, and a confinement layer that defended against an adversary that does not exist for a personal tool. **[The full accounting](docs/evaluation.md).**
 
 ---
 
 ## CLI reference
 
 ```bash
-# Log a route — natural form, straight from the declared routing line
+# Log a route, natural form, straight from the declared routing line
 cortex log-line "OMC > ralplan > Backend Architect @ L3" "refactor auth middleware" \
   --class build --tier-reason "touches auth; L2 would skip the verifier pass" \
   --route-confidence high --tier-confidence med --spec-confidence high
 
-# What happened last time I did something like this?
+# What happened last time on something like this?
 cortex hint "refactor the session store" --class build
 cortex hint "..." --min-similarity 0.05 --top 10     # widen the net
 
@@ -316,64 +314,64 @@ Cortex is only as good as the registry underneath it. Mine is below, not because
 
 <br>
 
-**Orchestrators** — the systems that actually run multi-step work.
+**Orchestrators**: the systems that actually run multi-step work.
 
 | Tool | What it's for |
 |---|---|
 | [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) | Multi-agent orchestration. Ships `ralplan`, `autopilot`, `ralph`, `/team`, and `/ccg`. The default for non-trivial builds. |
 | [GSD (gsd-core)](https://github.com/open-gsd/gsd-core) | Spec-driven, phase-based project management with context-rot prevention. Best for long multi-phase builds. |
-| [claude-plugins-official](https://github.com/anthropics/claude-plugins-official) | Anthropic's official marketplace — `feature-dev`, `code-review`, `pr-review-toolkit`, `security-guidance`. |
+| [claude-plugins-official](https://github.com/anthropics/claude-plugins-official) | Anthropic's official marketplace, `feature-dev`, `code-review`, `pr-review-toolkit`, `security-guidance`. |
 
-**Quality gates** — the things that argue with your work before it ships.
+**Quality gates**: the things that argue with your work before it ships.
 
 | Tool | What it's for |
 |---|---|
-| [LLM Council](https://github.com/karpathy/llm-council) | The primitive this whole project is a response to. Multiple models answer, cross-review, a chairman synthesizes. |
+| [LLM Council](https://github.com/karpathy/llm-council) | Multiple models answer, cross-review, and a chairman synthesizes. The pattern CCG implements. |
 | [adversarial-spec](https://github.com/zscole/adversarial-spec) | Harden a spec or API contract by debating it across models until they converge. Runs *before* you build. |
-| [gitleaks](https://github.com/gitleaks/gitleaks) | Deterministic secret scanner. Regex and entropy, no LLM — a reproducible pre-commit gate that never hallucinates. |
+| [gitleaks](https://github.com/gitleaks/gitleaks) | Deterministic secret scanner. Regex and entropy, no LLM, a reproducible pre-commit gate that never hallucinates. |
 | [defending-code harness](https://github.com/anthropics/defending-code-reference-harness) | Anthropic's security harness: `/threat-model`, `/vuln-scan`, `/triage`, `/patch`. |
 
-**Knowledge and search** — what the router reads before it decides.
+**Knowledge and search**: what the router reads before it decides.
 
 | Tool | What it's for |
 |---|---|
 | [Graphify](https://github.com/Graphify-Labs/graphify) | Turns code, docs, papers, and media into a queryable knowledge graph. Maps *meaning*, across content you already own. |
 | [Understand Anything](https://github.com/Egonex-AI/Understand-Anything) | Code-only codebase knowledge graph with architecture tours and business-domain mapping. |
-| [claude-mem](https://github.com/thedotmack/claude-mem) | Cross-session memory — captures, compresses, and re-injects context. |
+| [claude-mem](https://github.com/thedotmack/claude-mem) | Cross-session memory, captures, compresses, and re-injects context. |
 | [Context7](https://github.com/upstash/context7) | Live, version-specific library docs injected into context. Stops the model guessing at an API it half-remembers. |
 | [Exa](https://github.com/exa-labs/exa-mcp-server) · [Firecrawl](https://github.com/mendableai/firecrawl-mcp-server) | AI-native web search, and full-page extraction to markdown. Exa finds, Firecrawl extracts. |
-| [Scrapling](https://github.com/D4Vinci/Scrapling) | Adaptive scraper with anti-bot bypass — the fallback when Firecrawl hits a wall. |
+| [Scrapling](https://github.com/D4Vinci/Scrapling) | Adaptive scraper with anti-bot bypass, the fallback when Firecrawl hits a wall. |
 | [last30days](https://github.com/mvanhorn/last30days-skill) | Recency research across Reddit, HN, X, YouTube. The complement to deep research. |
 
-**Specialists and skills** — who actually does the work once routed.
+**Specialists and skills**: who actually does the work once routed.
 
 | Tool | What it's for |
 |---|---|
-| [Agency Agents](https://github.com/msitarzewski/agency-agents) | 240+ domain specialists across 20+ divisions — engineering, security, design, finance, GIS, marketing, and more. The pool the router fans out across. |
+| [Agency Agents](https://github.com/msitarzewski/agency-agents) | 240+ domain specialists across 20+ divisions, engineering, security, design, finance, GIS, marketing, and more. The pool the router fans out across. |
 | [anthropics/skills](https://github.com/anthropics/skills) | First-party document skills: `docx`, `pdf`, `pptx`, `xlsx`, plus `mcp-builder` and `skill-creator`. |
-| [knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins) | Anthropic's non-code plugins — data, legal, enterprise search, PM, marketing. |
-| [claude-tag-plugins](https://github.com/anthropics/claude-tag-plugins) | Anthropic's SaaS connector plugins — Jira, Linear, Salesforce, HubSpot, Datadog. One plugin per service. |
+| [knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins) | Anthropic's non-code plugins, data, legal, enterprise search, PM, marketing. |
+| [claude-tag-plugins](https://github.com/anthropics/claude-tag-plugins) | Anthropic's SaaS connector plugins, Jira, Linear, Salesforce, HubSpot, Datadog. One plugin per service. |
 | [financial-services](https://github.com/anthropics/financial-services) | DCF, LBO, comps, earnings analysis, pitch decks, with live Excel and PowerPoint integration. |
-| [Tessl](https://tessl.io/) | Framework-specific skills — Next.js, React, Stripe, Three.js, modern Python. |
+| [Tessl](https://tessl.io/) | Framework-specific skills, Next.js, React, Stripe, Three.js, modern Python. |
 | [obsidian-skills](https://github.com/kepano/obsidian-skills) | Vault operations via the Obsidian CLI. Where build logs get written. |
 | [awesome-design-md](https://github.com/VoltAgent/awesome-design-md) | 58+ real `DESIGN.md` specs (Stripe, Linear, Vercel). Drop one in a project so the UI stops looking AI-generated. |
 | [Hyperframes](https://github.com/heygen-com/hyperframes) | Write HTML, render deterministic MP4. Product tours, explainers, chart-race video. |
 
-**Domain models** — where a generic LLM is simply the wrong instrument.
+**Domain models**: where a generic LLM is simply the wrong instrument.
 
 | Tool | What it's for |
 |---|---|
 | [Kronos](https://github.com/shiyu-coder/Kronos) | Foundation model for OHLCV candlestick forecasting, trained on 45+ exchanges. Use it as a feature, never as an oracle. |
-| [QuantMind](https://github.com/LLMQuant/quant-mind) | Ingests financial research at scale — arXiv, SEC filings, news — into a structured, queryable knowledge base. |
+| [QuantMind](https://github.com/LLMQuant/quant-mind) | Ingests financial research at scale, arXiv, SEC filings, news, into a structured, queryable knowledge base. |
 
-**Infrastructure** — the plumbing the layers above consume.
+**Infrastructure**: the plumbing the layers above consume.
 
 | Tool | What it's for |
 |---|---|
 | [Morph](https://www.morphllm.com/) | Fast Apply edits and semantic code search. |
-| [DuckDB MCP](https://github.com/motherduckdb/mcp-server-motherduck) | In-process OLAP — SQL straight over local Parquet, CSV, and JSON. |
+| [DuckDB MCP](https://github.com/motherduckdb/mcp-server-motherduck) | In-process OLAP, SQL straight over local Parquet, CSV, and JSON. |
 | [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) | Lighthouse, a11y audits, network debugging, screenshots. Visual QA. |
-| [Toolport](https://github.com/tsouth89/toolport) | Local MCP gateway with lazy tool discovery — compact meta-tools instead of every server's full catalog. |
+| [Toolport](https://github.com/tsouth89/toolport) | Local MCP gateway with lazy tool discovery, compact meta-tools instead of every server's full catalog. |
 
 > **A note on GSD.** The original `gsd-build/get-shit-done` repo was archived in June 2026. Development continues at [`open-gsd/gsd-core`](https://github.com/open-gsd/gsd-core), a community fork, which is what current plugin releases treat as upstream. That is the link above. Check it out yourself before adopting it.
 
@@ -418,8 +416,6 @@ cortex/
 ## Credits
 
 Cortex is a router. Nearly everything valuable in the stack above was built by someone else; it just decides which of them to call. Credit to every maintainer in [that table](#the-stack-cortex-routes-between).
-
-It exists as a friendly response to [Andrej Karpathy's LLM Council](https://github.com/karpathy/llm-council). His pattern is the primitive. This is the layer above it.
 
 ## License
 
