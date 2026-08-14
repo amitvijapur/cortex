@@ -113,6 +113,22 @@ def test_legacy_rows_still_read(sb):
     check("hint exits 0", r.returncode == 0, r.stderr[-300:])
     check("hint finds the similar legacy route", "ralplan" in r.stdout, r.stdout)
 
+    # The regression this guards: hint used to gate on Jaccard >= 0.15 by default, which
+    # silenced it on 89% of real queries to buy 1.3% top-5 route recall (eval/hint_arms.py).
+    # A lexically unrelated query must still return the recent routes in its class, because
+    # recency scored 20.8% on the same replay. If this ever goes quiet again, the gate is
+    # back.
+    r = sb.run("hint", "provision the kubernetes ingress controller", "--class", "build")
+    check("hint stays useful on a lexically unrelated query",
+          "no similar past tasks" not in r.stdout and "ralplan" in r.stdout, r.stdout)
+    check("hint shows similarity without ranking on it", "sim 0.00" in r.stdout, r.stdout)
+
+    # Narrowing must still be available, just not as the default.
+    r = sb.run("hint", "provision the kubernetes ingress controller", "--class", "build",
+               "--min-similarity", "0.9")
+    check("--min-similarity still narrows when asked",
+          "no past routes above similarity" in r.stdout, r.stdout)
+
     r = sb.run("learn", "--threshold", "2", "--no-proposals")
     check("learn groups legacy rows", "autopilot" in r.stdout, r.stdout)
 
