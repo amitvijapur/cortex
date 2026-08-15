@@ -415,7 +415,7 @@ cortex/
 
 ## Credits
 
-Cortex is a router. Nearly everything valuable in the stack above was built by someone else; it just decides which of them to call. Credit to every maintainer in [that table](#the-stack-cortex-routes-between).
+Cortex decides and records. Nearly everything valuable in the stack above was built by someone else; Cortex chooses which of them to call and keeps the record of why. Credit to every maintainer in [that table](#the-stack-cortex-routes-between).
 
 ## License
 
