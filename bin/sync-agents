@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+"""Refresh ~/.claude/agents from the upstream roster without losing local edits.
+
+The roster is installed by copying files out of a clone, so `git pull` refreshes the clone
+and nothing else. Copying the clone over the install is the obvious next step and it is
+wrong: 234 of the 292 installed files carry local edits, nearly all of them the compressed
+`description:` frontmatter that agent retrieval reads. A copy reverts every one of them and
+the loss is invisible until retrieval quality drops.
+
+**This is a three-way merge, and it has to be.** A two-way comparison cannot tell "local
+rewrote the description" apart from "upstream rewrote the body", because after a pull both
+files differ from each other on both counts. Distinguishing them needs the common ancestor:
+the commit the install was last copied from. That commit is recorded in
+`~/.claude/agents/.synced-from` on every apply, so subsequent runs need no argument. The
+first run on an install that predates the stamp has to be told with --base.
+
+Per file, against base / local / upstream:
+
+    NEW        upstream added it since base            -> copy
+    UPDATE     local matches base, upstream moved on   -> copy
+    MERGE      local changed only the description,
+               upstream changed only the body          -> upstream body + local description
+    LOCAL-ONLY upstream never had it                   -> leave
+    CONFLICT   both sides edited the same region       -> report, change nothing
+
+Dry run by default. Nothing is written without --apply.
+
+    python3 bin/sync-agents --base 6f8d5e5     # first run, no stamp yet
+    python3 bin/sync-agents                    # later runs, stamp supplies the base
+    python3 bin/sync-agents --apply
+"""
+import argparse
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+SRC = Path.home() / "Desktop" / "tools" / "agency-agents-src"
+DST = Path.home() / ".claude" / "agents"
+STAMP = ".synced-from"
+SKIP_DIRS = {"examples", "scripts", ".git", ".github"}
+
+# A description is a YAML scalar that may run over several lines: upstream writes some as
+# folded blocks with indented continuations, while the local rewrites collapse them to one
+# quoted line. Matching only the first line leaves the continuations orphaned, which makes
+# a description-only edit look like a body edit. So the match runs to the next line that
+# starts in column zero.
+DESC_RE = re.compile(r"^description:.*(?:\n[ \t]+\S.*)*", re.M)
+
+
+def git(repo, *args):
+    r = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+    return r.stdout if r.returncode == 0 else None
+
+
+# Repo documentation that lives alongside the agents. Claude Code ignores any file
+# without agent frontmatter, so copying these is harmless rather than broken, but it puts
+# upstream's README churn into the change report and makes a quiet sync look eventful.
+DOC_NAMES = {"README.md", "CONTRIBUTING.md", "CONTRIBUTING_zh-CN.md", "SECURITY.md",
+             "CHANGELOG.md", "CODE_OF_CONDUCT.md"}
+
+
+def agent_files(root):
+    out = set()
+    for p in root.rglob("*.md"):
+        rel = p.relative_to(root)
+        if rel.parts and rel.parts[0] in SKIP_DIRS:
+            continue
+        if p.name in DOC_NAMES:
+            continue
+        out.add(rel)
+    return out
+
+
+def description_of(text):
+    m = DESC_RE.search(text)
+    return m.group(0) if m else None
+
+
+def body_of(text):
+    """The file with its description neutralised, so two bodies can be compared."""
+    return DESC_RE.sub("<DESC>", text, count=1)
+
+
+def splice(upstream_text, local_text):
+    """Upstream's file carrying the locally-written description."""
+    d = description_of(local_text)
+    if d is None:
+        return upstream_text
+    return DESC_RE.sub(lambda _: d, upstream_text, count=1)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--apply", action="store_true", help="write changes (default: dry run)")
+    ap.add_argument("--base", help="commit the install was last copied from "
+                                   "(default: read .synced-from)")
+    ap.add_argument("--src", default=str(SRC))
+    ap.add_argument("--dst", default=str(DST))
+    args = ap.parse_args()
+
+    src, dst = Path(args.src).expanduser(), Path(args.dst).expanduser()
+    for p in (src, dst):
+        if not p.is_dir():
+            sys.exit(f"missing: {p}")
+
+    base = args.base
+    stamp_path = dst / STAMP
+    if not base and stamp_path.exists():
+        base = stamp_path.read_text().split()[0].strip()
+    if not base:
+        sys.exit(f"no base commit. {stamp_path} is absent and --base was not given.\n"
+                 f"Pass the commit the install was last copied from; `git -C {src} log` "
+                 f"around the install's mtime will identify it.")
+    if git(src, "cat-file", "-e", f"{base}^{{commit}}") is None:
+        sys.exit(f"base commit {base} is not in {src}")
+
+    head = (git(src, "log", "-1", "--format=%h %cs") or "?").strip()
+    print(f"source : {src}  @ {head}")
+    print(f"base   : {base}  (what the install was copied from)")
+    print(f"install: {dst}")
+    print(f"mode   : {'APPLY' if args.apply else 'dry run'}\n")
+
+    new, update, merge, conflict, current = [], [], [], [], []
+    s_files = agent_files(src)
+
+    for rel in sorted(s_files):
+        up = (src / rel).read_text()
+        dp = dst / rel
+        if not dp.exists():
+            new.append(rel)
+            continue
+        loc = dp.read_text()
+        if loc == up:
+            current.append(rel)
+            continue
+
+        b = git(src, "show", f"{base}:{rel.as_posix()}")
+        if b is None:
+            # Upstream added it after base, yet a file is already installed. Not something
+            # this script should guess at.
+            conflict.append((rel, "added upstream but already present locally"))
+            continue
+        if loc == b:
+            update.append(rel)                      # no local edits to protect
+            continue
+        if up == b:
+            continue                                # local edits, upstream untouched: leave
+
+        local_desc_only = body_of(loc) == body_of(b)
+        upstream_kept_desc = description_of(up) == description_of(b)
+        if local_desc_only and upstream_kept_desc:
+            merge.append(rel)
+        elif local_desc_only and not upstream_kept_desc:
+            conflict.append((rel, "both sides rewrote the description"))
+        else:
+            conflict.append((rel, "local edits reach past the description"))
+
+    localonly = sorted(agent_files(dst) - s_files)
+
+    def show(label, items, note, fmt=lambda x: str(x)):
+        print(f"{label}: {len(items):3d}   {note}")
+        for it in items[:6]:
+            print(f"      {fmt(it)}")
+        if len(items) > 6:
+            print(f"      ... and {len(items) - 6} more")
+        print()
+
+    show("NEW     ", new, "added upstream, copied verbatim")
+    show("UPDATE  ", update, "changed upstream, no local edits to protect")
+    show("MERGE   ", merge, "upstream body + local description")
+    show("CONFLICT", conflict, "left untouched, resolve by hand",
+         fmt=lambda t: f"{t[0]}  ({t[1]})")
+    print(f"LOCAL-ONLY: {len(localonly):3d}   only in the install, left untouched")
+    print(f"UNCHANGED : {len(current):3d}   identical to upstream already\n")
+
+    if not args.apply:
+        print("dry run — nothing written. re-run with --apply")
+        return 0
+
+    for rel in new + update:
+        (dst / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src / rel, dst / rel)
+    for rel in merge:
+        (dst / rel).write_text(splice((src / rel).read_text(), (dst / rel).read_text()))
+
+    full = (git(src, "rev-parse", "HEAD") or "").strip()
+    stamp_path.write_text(f"{full}\n")
+    print(f"applied: {len(new)} new, {len(update)} updated, {len(merge)} merged")
+    print(f"stamped {STAMP} at {full[:9]}")
+    if conflict:
+        print(f"{len(conflict)} conflicts left unchanged — listed above")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
