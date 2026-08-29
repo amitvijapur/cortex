@@ -16,6 +16,35 @@ quality claim would be exactly the kind of false assurance this project exists t
 
 ---
 
+## The standing check: what does the no-model baseline score?
+
+Four improvements to retrieval have now been proposed here, and all four lost:
+
+| Proposal | Beaten by | Margin |
+|---|---|---|
+| Tuned BM25F ranker | the untuned baseline, on held-out data | lost after winning on dev |
+| 232 agent description rewrites | the original descriptions, on held-out data | lost |
+| Semantic embeddings for `hint` | showing the 5 most recent routes in the same class | ~16x |
+| Graph layer over the routing log | the same recency baseline | +1 case, p = 1.0 |
+
+The shape is identical every time: a better **scoring function** offered for a retrieval
+problem whose bottleneck was somewhere else, compared against whichever baseline made it
+look good. Each would have been caught in an afternoon by asking what the version with no
+model and no new data structure scores on the same denominator.
+
+So that question is now mandatory before any retrieval change is built, not after. If the
+trivial baseline has not been measured, the proposal is not ready to evaluate. `hint_arms.py`
+exists to make running it cheap.
+
+The fourth entry is worth singling out because the losing hypothesis was a good one.
+`tier_reason` is populated on every row and visibly encodes the shape vocabulary the routing
+protocol says drives a route — "reversible", "single domain", "no prod blast radius". Given
+oracle access to a query's own `tier_reason`, which cheats, retrieving on shape still scored
+*below* plain recency. Being able to tell a good story about why a change should work is not
+correlated with the change working, which is the whole reason this directory exists.
+
+---
+
 ## Adherence — is the protocol actually being followed?
 
 `score_adherence.py` scores every route in the log against the floors in
@@ -151,6 +180,49 @@ already lost twice.
 The finding: a meaningful share of queries are unreachable by any lexical retriever, so the
 cap is vocabulary rather than ranking. That result is what gates whether the embedding work
 is worth doing.
+
+### One denominator for every proposal
+
+`hint_arms.py` exists because the scripts above were each written to assess one proposal,
+and a proposal assessed against its own chosen baseline will tend to win. It replays every
+arm — the shipped Jaccard gate, recency, recency plus project, shape-based retrieval, and a
+graph retriever — over the same queries against the same prior pool, and reports the same
+four numbers for each.
+
+Two conventions in it are load-bearing:
+
+- **The graph arm is restricted to edges a cold query legally has.** When `hint` runs, the
+  session has a task, a class and a project, and does not yet have a route, tier or agent.
+  Traversing a "shares an agent with" edge out of the query would be reading the answer.
+  Any arm that scores well by using a field it would not have at call time is measuring
+  nothing.
+- **A number produced by an uncommitted script is not a baseline.** The MLX decision
+  recorded 23.8% for recency and treated it as the bar for the follow-up work. It does not
+  reproduce: the same window gives 19.2% literally, 20.8% deduplicating by route, 25.4% at a
+  looser label. None of those is wrong, and the figure was never pinned to code that says
+  which one it meant. The `LABEL SENSITIVITY` block prints the grid so the next comparison
+  starts from a stated definition.
+
+`graph_density.py` answers the prior question of whether the log contains a graph at all. It
+counts the edges each proposed affordance would get, and checks whether traversal depth does
+anything: for a graph joined on one shared attribute, the 1-hop and 2-hop neighbourhoods are
+the same set, which is a property of the construction rather than of this dataset and cannot
+be fixed with more rows.
+
+## Registry evidence — unused, or unreachable?
+
+`registry_reachability.py` scores every extended-registry entry on three axes that a single
+usage count silently merges: is it **on disk**, is it **reachable** from a Decision Shortcuts
+row, and is it **used** anywhere in the log.
+
+Only the installed-and-reachable-and-unused cell is evidence about a tool. An entry the
+router was never told about, or one whose install path does not exist, has a usage count of
+zero for reasons the tool had no way to influence. Both cases were live: two entries have no
+shortcut row, and the registry claimed a design-systems library at a path that is not there.
+
+Aliases are hand-curated rather than inferred, because a fuzzy match that counts the word
+"data" as a use of the `data` plugin manufactures exactly the false confidence the rest of
+this directory exists to prevent.
 
 ## Supporting files
 

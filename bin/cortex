@@ -867,8 +867,17 @@ UNSCORED_WEIGHT = 0.3  # entry logged but never given an outcome
 
 
 def cmd_hint(args):
-    """Phase 3 (advisory mode): given a task description, surface similar past routes
+    """Phase 3 (advisory mode): given a task description, surface recent past routes
     weighted by outcome. Does NOT decide — returns evidence to factor into the route.
+
+    Ranking is by recency within the filtered pool, not by similarity to the task text.
+    That is a measured choice, not a simplification. Replayed chronologically over the
+    log, a Jaccard gate at 0.15 fired on 11% of queries and surfaced the route actually
+    taken in 1.3% of them; plain recency over the same class scores 20.8% on the same
+    denominator with no scoring function at all. Similarity is still computed and shown,
+    because it is occasionally informative to a reader, but it no longer decides anything
+    and it no longer silences the command. `eval/hint_arms.py` runs every proposed arm,
+    including embeddings-shaped and graph-shaped ones, side by side.
 
     Filter by --tier or --class to narrow the comparison pool. Note that on a small
     log, filtering by both fragments the pool into buckets too small to be useful —
@@ -879,10 +888,9 @@ def cmd_hint(args):
         print("cortex log is empty — no hint available yet")
         return 0
 
+    # A task too short to tokenise used to abort the command. It no longer needs to:
+    # similarity is an annotation now, and recency ranking works without it.
     target = tokens(args.task)
-    if not target:
-        print("task too short to score similarity")
-        return 0
 
     # Filter the pool first — drastically improves signal vs noise
     pool = entries
@@ -899,44 +907,65 @@ def cmd_hint(args):
         print(f"no past entries match filter ({', '.join(filters)})")
         return 0
 
-    scored = []
-    for e in pool:
+    def similarity(e):
         toks = tokens(e.get("task", ""))
-        if not toks:
-            continue
-        jaccard = len(target & toks) / len(target | toks)
-        if jaccard >= args.min_similarity:
-            scored.append((jaccard, e))
+        return len(target & toks) / len(target | toks) if toks else 0.0
 
-    if not scored:
-        print(f"no similar past tasks (similarity ≥ {args.min_similarity}, pool size {len(pool)})")
+    # Opt-in narrowing only. Similarity was the default gate until it was measured: it
+    # fired on 11% of queries and put the correct route in the top 5 on 1.3% of them.
+    # Recency over the same class scores 20.8% on the same replay, with no scoring
+    # function at all. See eval/hint_arms.py for every arm on one denominator.
+    if args.min_similarity is not None:
+        pool = [e for e in pool if similarity(e) >= args.min_similarity]
+        if not pool:
+            print(f"no past routes above similarity {args.min_similarity} "
+                  f"(narrowing is opt-in; drop --min-similarity to see recent routes)")
+            return 0
+
+    # Most recent first, one row per distinct route, so five rows mean five real options
+    # rather than five entries that collapse into two.
+    top, seen = [], set()
+    for e in reversed(pool):
+        route = (e.get("system"), e.get("pattern"), e.get("tier"))
+        if route in seen:
+            continue
+        seen.add(route)
+        top.append(e)
+        if len(top) >= args.top:
+            break
+
+    if not top:
+        print(f"no past routes to compare against (pool size {len(pool)})")
         return 0
 
-    scored.sort(key=lambda x: -x[0])
-    top = scored[: args.top]
-
-    # Tally routes among top matches; weight each by its outcome
-    tally = defaultdict(float)
-    for sim, e in top:
-        route = (e.get("system"), e.get("pattern"), e.get("tier"))
-        tally[route] += sim * OUTCOME_WEIGHTS.get(e.get("outcome"), UNSCORED_WEIGHT)
-
     print(f"hint for: {args.task!r}\n")
-    print(f"top {len(top)} similar past tasks (similarity ≥ {args.min_similarity}):")
-    for sim, e in top:
+    noun = "route" if len(top) == 1 else "distinct routes"
+    print(f"{len(top)} most recent {noun} in this pool (of {len(pool)} entries):")
+    for e in top:
         outcome = e.get("outcome") or "no-outcome"
         route = f"{e.get('system', '?')} > {e.get('pattern', '?')} @ {e.get('tier', '?')}"
-        print(f"  [{sim:.2f}] [{outcome}] {route}")
+        print(f"  [sim {similarity(e):.2f}] [{outcome}] {route}")
         print(f"         task: {e.get('task', '?')[:80]}")
     print()
-
-    ranked = sorted(tally.items(), key=lambda x: -x[1])
-    print("suggested routes (weighted by outcome):")
-    for (sys_, pat, tier), score in ranked[:3]:
-        print(f"  score={score:+.2f}  {sys_} > {pat} @ {tier}")
+    print("  'sim' is shown for context, not used for ranking — lexical overlap with a past")
+    print("  task was measured to carry almost no signal about which route it received.")
     print()
-    print("advisory only — you still pick the final route. negative scores mean past attempts "
-          "at that route failed or were corrected.")
+
+    # There is deliberately no ranked "suggested route" list here. The outcome-weighted
+    # tally that used to sit at this point was built for similarity ranking; under recency
+    # it recommended whatever shipped most recently, which on a real query meant proposing
+    # `Direct > meeting-prep @ L2` for a graph-engineering task. Nothing measured supports
+    # ranking these five against each other, and an authoritative-looking score with no
+    # measurement behind it is the failure mode this whole harness exists to catch. The
+    # five rows are the evidence; the reader ranks them.
+    rough = [e for e in pool if e.get("outcome") in ("corrected", "partial", "abandoned")]
+    if rough:
+        print(f"  {len(rough)} of {len(pool)} entries in this pool did not ship cleanly:")
+        for e in rough[-3:]:
+            print(f"    [{e.get('outcome')}] {e.get('system', '?')} > {e.get('pattern', '?')} "
+                  f"@ {e.get('tier', '?')} — {e.get('task', '?')[:56]}")
+        print()
+    print("advisory only — you still pick the final route.")
     return 0
 
 
@@ -1819,9 +1848,11 @@ def build_parser():
 
     hn = sub.add_parser("hint", help="advisory: surface similar past routes for a task")
     hn.add_argument("task", help="one-line task description to find similar past routes for")
-    hn.add_argument("--top", type=int, default=5, help="number of similar past tasks to consider (default 5)")
-    hn.add_argument("--min-similarity", type=float, default=0.15,
-                    help="minimum Jaccard similarity to count as related (default 0.15)")
+    hn.add_argument("--top", type=int, default=5, help="number of past routes to surface (default 5)")
+    hn.add_argument("--min-similarity", type=float, default=None,
+                    help="opt-in narrowing: drop past routes scoring below this Jaccard "
+                         "similarity. Off by default — as a default gate it silenced 89%% "
+                         "of queries to buy 1.3%% top-5 route recall (eval/hint_arms.py)")
     hn.add_argument("--tier", choices=["L1", "L2", "L3", "L4"],
                     help="filter past routes to a matching tier (only useful once the log is large)")
     hn.add_argument("--class", dest="classification",
