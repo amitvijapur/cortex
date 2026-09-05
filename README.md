@@ -79,6 +79,7 @@ Verify with `python3 ~/.claude/bin/cortex doctor`.
 |---|---|
 | `bin/cortex` | `~/.claude/bin/cortex` |
 | `skills/cortex-log`, `cortex-learn`, `cortex-reroute`, `cortex-init` | `~/.claude/skills/` |
+| `skills/cortex-delegate` | `~/.codex/skills/`, when a Codex home already exists |
 | `templates/cortex.md` | `~/.claude/cortex.md`, only if you don't already have one |
 
 It does not touch `settings.json`.
@@ -404,7 +405,7 @@ cortex/
 ├── docs/
 │   ├── routing.md       ← calibration rules and the reasoning behind them
 │   └── evaluation.md    ← what the checks prove, and what they have rejected
-├── skills/              ← /cortex-log, /cortex-learn, /cortex-reroute, /cortex-init
+├── skills/              ← Claude routing skills plus Codex-native cortex-delegate
 ├── templates/cortex.md  ← the framework, registry stubbed
 ├── examples/cortex.md   ← a populated registry, for reference
 ├── assets/              ← diagrams

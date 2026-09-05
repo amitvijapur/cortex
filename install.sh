@@ -9,6 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
 BIN_DIR="$CLAUDE_DIR/bin"
 SKILLS_DIR="$CLAUDE_DIR/skills"
+CODEX_DIR="${CODEX_DIR:-${CODEX_HOME:-$HOME/.codex}}"
 
 bold()  { printf '\033[1m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
@@ -31,6 +32,18 @@ for skill in cortex-log cortex-learn cortex-reroute cortex-init; do
   cp "$SCRIPT_DIR/skills/$skill/SKILL.md" "$SKILLS_DIR/$skill/SKILL.md"
   green "  ✓ skills/$skill/SKILL.md"
 done
+
+# cortex-delegate uses Codex desktop task APIs, so installing it into Claude Code
+# would advertise tools that runtime cannot call. Install it only when a Codex home
+# already exists. Do not create ~/.codex as a side effect for Claude-only users.
+if [ -d "$CODEX_DIR" ]; then
+  mkdir -p "$CODEX_DIR/skills/cortex-delegate"
+  cp "$SCRIPT_DIR/skills/cortex-delegate/SKILL.md" \
+     "$CODEX_DIR/skills/cortex-delegate/SKILL.md"
+  green "  ✓ skills/cortex-delegate/SKILL.md → $CODEX_DIR/skills/cortex-delegate"
+else
+  dim "  - skipped cortex-delegate (no Codex home at $CODEX_DIR)"
+fi
 
 # 3. cortex.md — only if not already present
 CORTEX_MD="$CLAUDE_DIR/cortex.md"
