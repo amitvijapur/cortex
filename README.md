@@ -26,6 +26,12 @@ Cortex does not replace your workflow systems. It picks between them, attaches a
 
 ## Table of contents
 
+The [Frontend Design Library](frontend/README.md) collects reusable guidance,
+prompts, checklists, books and resources. Browse its [searchable directory](frontend/site/index.html).
+Install its on-demand skill into existing agent homes with
+`bash scripts/install_frontend_library.sh`. This dedicated installer leaves the
+installed Cortex CLI and existing routing configuration intact.
+
 - [Why this exists](#why-this-exists)
 - [Install](#install)
 - [What it costs you in context](#what-it-costs-you-in-context)

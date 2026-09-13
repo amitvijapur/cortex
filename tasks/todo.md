@@ -1,5 +1,21 @@
 # Astra and ChatGPT Work delegation
 
+## Frontend design library, approved 13 September 2026
+
+- [x] One Astra review of the initial plan; present revised scope.
+- [x] Import guidance and 46 resource links plus seven books, retaining provenance.
+- [x] Build a validated catalogue and searchable static directory.
+- [x] Add a focused skill and dedicated pointer installer.
+- [x] Verify migration, generated output, interaction logic, and installation.
+- [x] Record results and usage in the project build log.
+- [ ] Visual browser verification: blocked by browser URL policy for the local file.
+
+The library is on demand. Existing routing algorithms, default routes, and the live
+CLI remain unchanged. Markdown guidance and resources.json are editable sources;
+the legacy HTML is a dated snapshot. Private assets stay outside version control.
+Public catalogue updates are editorial, with evidence recorded rather than
+automatically promoted into routing rules. No new Cortex subcommands in this build.
+
 - [x] Trace the existing Fable and Opus delegation mechanism.
 - [x] Identify the live Codex and ChatGPT Work task primitives and their boundaries.
 - [x] Add a reusable `cortex-delegate` skill with separate Codex and Work lanes.

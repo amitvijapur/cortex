@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-GB" xml:lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>The Non-Vibe-Coded Frontend Design Kit</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    span.underline{text-decoration: underline;}
+    div.column{display: inline-block; vertical-align: top; width: 50%;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="data:text/css,%3Aroot%20%7B%0Acolor%2Dscheme%3A%20light%3B%0A%2D%2Dpaper%3A%20%23f3f0e8%3B%0A%2D%2Dpaper%2Draised%3A%20%23fbf9f3%3B%0A%2D%2Dink%3A%20%23182229%3B%0A%2D%2Dink%2Dsoft%3A%20%23465158%3B%0A%2D%2Dline%3A%20%23c9c4b8%3B%0A%2D%2Dline%2Dstrong%3A%20%23969386%3B%0A%2D%2Dsignal%3A%20%23c5462d%3B%0A%2D%2Dsignal%2Ddark%3A%20%238c2c1d%3B%0A%2D%2Dwash%3A%20%23e6e1d6%3B%0A%2D%2Dcode%3A%20%23242d31%3B%0A%2D%2Dcode%2Dink%3A%20%23f5f0e3%3B%0A%2D%2Dserif%3A%20%22Iowan%20Old%20Style%22%2C%20%22Baskerville%22%2C%20%22Palatino%20Linotype%22%2C%20Palatino%2C%20Georgia%2C%20serif%3B%0A%2D%2Dsans%3A%20%22Avenir%20Next%22%2C%20Avenir%2C%20%22Segoe%20UI%22%2C%20%22Helvetica%20Neue%22%2C%20sans%2Dserif%3B%0A%2D%2Dmono%3A%20%22SFMono%2DRegular%22%2C%20Consolas%2C%20%22Liberation%20Mono%22%2C%20monospace%3B%0A%2D%2Dmeasure%3A%2074ch%3B%0A%2D%2Dsidebar%3A%2018rem%3B%0A%2D%2Dgutter%3A%20clamp%281%2E25rem%2C%203%2E4vw%2C%204rem%29%3B%0A%7D%0A%2A%20%7B%0Abox%2Dsizing%3A%20border%2Dbox%3B%0A%7D%0Ahtml%20%7B%0Ascroll%2Dbehavior%3A%20smooth%3B%0Ascroll%2Dpadding%2Dtop%3A%202rem%3B%0Abackground%3A%20var%28%2D%2Dpaper%29%3B%0A%7D%0Abody%20%7B%0Adisplay%3A%20grid%3B%0Agrid%2Dtemplate%2Dcolumns%3A%20minmax%2814rem%2C%20var%28%2D%2Dsidebar%29%29%20minmax%280%2C%201fr%29%3B%0Agap%3A%200%20var%28%2D%2Dgutter%29%3B%0Amax%2Dwidth%3A%2096rem%3B%0Amargin%3A%200%20auto%3B%0Apadding%3A%20clamp%281%2E25rem%2C%203vw%2C%203rem%29%20var%28%2D%2Dgutter%29%208rem%3B%0Acolor%3A%20var%28%2D%2Dink%29%3B%0Abackground%3A%0Alinear%2Dgradient%2890deg%2C%20transparent%20calc%28100%25%20%2D%201px%29%2C%20rgb%2824%2034%2041%20%2F%200%2E055%29%200%29%200%200%20%2F%204rem%20100%25%2C%0Avar%28%2D%2Dpaper%29%3B%0Afont%2Dfamily%3A%20var%28%2D%2Dsans%29%3B%0Afont%2Dsize%3A%201rem%3B%0Aline%2Dheight%3A%201%2E7%3B%0Atext%2Drendering%3A%20optimizeLegibility%3B%0A%7D%0Abody%3A%3Abefore%20%7B%0Acontent%3A%20%22FIELD%20MANUAL%20%2F%20FRONTEND%20PRACTICE%22%3B%0Agrid%2Dcolumn%3A%201%20%2F%20%2D1%3B%0Apadding%3A%200%200%200%2E8rem%3B%0Aborder%2Dbottom%3A%202px%20solid%20var%28%2D%2Dink%29%3B%0Acolor%3A%20var%28%2D%2Dink%2Dsoft%29%3B%0Afont%2Dfamily%3A%20var%28%2D%2Dsans%29%3B%0Afont%2Dsize%3A%200%2E72rem%3B%0Afont%2Dweight%3A%20700%3B%0Aletter%2Dspacing%3A%200%2E16em%3B%0A%7D%0Aa%20%7B%0Acolor%3A%20var%28%2D%2Dsignal%2Ddark%29%3B%0Atext%2Ddecoration%2Dcolor%3A%20rgb%28197%2070%2045%20%2F%200%2E4%29%3B%0Atext%2Ddecoration%2Dthickness%3A%200%2E09em%3B%0Atext%2Dunderline%2Doffset%3A%200%2E18em%3B%0A%7D%0Aa%3Ahover%20%7B%0Acolor%3A%20var%28%2D%2Dsignal%29%3B%0Atext%2Ddecoration%2Dcolor%3A%20currentColor%3B%0A%7D%0Aa%3Afocus%2Dvisible%2C%0Asummary%3Afocus%2Dvisible%20%7B%0Aoutline%3A%203px%20solid%20var%28%2D%2Dsignal%29%3B%0Aoutline%2Doffset%3A%204px%3B%0Aborder%2Dradius%3A%201px%3B%0A%7D%0A%2Eskip%2Dlink%20%7B%0Aposition%3A%20fixed%3B%0Az%2Dindex%3A%2010%3B%0Atop%3A%200%2E75rem%3B%0Aleft%3A%200%2E75rem%3B%0Apadding%3A%200%2E65rem%200%2E85rem%3B%0Abackground%3A%20var%28%2D%2Dink%29%3B%0Acolor%3A%20var%28%2D%2Dpaper%2Draised%29%3B%0Afont%2Dsize%3A%200%2E82rem%3B%0Afont%2Dweight%3A%20750%3B%0Atransform%3A%20translateY%28%2D180%25%29%3B%0A%7D%0A%2Eskip%2Dlink%3Afocus%20%7B%0Acolor%3A%20var%28%2D%2Dpaper%2Draised%29%3B%0Atransform%3A%20translateY%280%29%3B%0A%7D%0A%23TOC%20%7B%0Aposition%3A%20sticky%3B%0Atop%3A%201%2E25rem%3B%0Agrid%2Dcolumn%3A%201%3B%0Aalign%2Dself%3A%20start%3B%0Amax%2Dheight%3A%20calc%28100vh%20%2D%202%2E5rem%29%3B%0Amargin%2Dtop%3A%20clamp%282%2E5rem%2C%206vw%2C%205%2E5rem%29%3B%0Apadding%3A%201rem%201%2E1rem%201%2E4rem%200%3B%0Aoverflow%3A%20auto%3B%0Aborder%2Dtop%3A%201px%20solid%20var%28%2D%2Dline%2Dstrong%29%3B%0Aborder%2Dbottom%3A%201px%20solid%20var%28%2D%2Dline%29%3B%0Ascrollbar%2Dcolor%3A%20var%28%2D%2Dline%2Dstrong%29%20transparent%3B%0Ascrollbar%2Dwidth%3A%20thin%3B%0A%7D%0A%23TOC%3A%3Abefore%20%7B%0Acontent%3A%20%22CONTENTS%22%3B%0Adisplay%3A%20block%3B%0Amargin%2Dbottom%3A%200%2E9rem%3B%0Acolor%3A%20var%28%2D%2Dsignal%2Ddark%29%3B%0Afont%2Dsize%3A%200%2E68rem%3B%0Afont%2Dweight%3A%20800%3B%0Aletter%2Dspacing%3A%200%2E18em%3B%0A%7D%0A%23TOC%20ul%20%7B%0Amargin%3A%200%3B%0Apadding%3A%200%3B%0Alist%2Dstyle%3A%20none%3B%0A%7D%0A%23TOC%20ul%20ul%20%7B%0Amargin%3A%200%2E35rem%200%200%2E85rem%200%2E75rem%3B%0Apadding%2Dleft%3A%200%2E8rem%3B%0Aborder%2Dleft%3A%201px%20solid%20var%28%2D%2Dline%29%3B%0A%7D%0A%23TOC%20li%20%7B%0Amargin%3A%200%2E22rem%200%3B%0A%7D%0A%23TOC%20a%20%7B%0Adisplay%3A%20block%3B%0Apadding%3A%200%2E14rem%200%3B%0Acolor%3A%20var%28%2D%2Dink%2Dsoft%29%3B%0Afont%2Dsize%3A%200%2E78rem%3B%0Afont%2Dweight%3A%20560%3B%0Aline%2Dheight%3A%201%2E35%3B%0Atext%2Ddecoration%3A%20none%3B%0A%7D%0A%23TOC%20%3E%20ul%20%3E%20li%20%3E%20a%20%7B%0Acolor%3A%20var%28%2D%2Dink%29%3B%0Afont%2Dsize%3A%200%2E84rem%3B%0Afont%2Dweight%3A%20740%3B%0A%7D%0A%23TOC%20a%3Ahover%20%7B%0Acolor%3A%20var%28%2D%2Dsignal%2Ddark%29%3B%0A%7D%0Amain%20%7B%0Agrid%2Dcolumn%3A%202%3B%0Amin%2Dwidth%3A%200%3B%0A%7D%0Asection%2Elevel1%20%7B%0Amin%2Dwidth%3A%200%3B%0Awidth%3A%20min%28100%25%2C%2078rem%29%3B%0Apadding%2Dtop%3A%20clamp%284%2E5rem%2C%208vw%2C%208rem%29%3B%0A%7D%0Asection%2Elevel1%3Afirst%2Dof%2Dtype%20%7B%0Apadding%2Dtop%3A%20clamp%283%2E5rem%2C%209vw%2C%208%2E5rem%29%3B%0A%7D%0Asection%2Elevel1%20%2B%20section%2Elevel1%20%7B%0Amargin%2Dtop%3A%20clamp%283rem%2C%207vw%2C%207rem%29%3B%0Aborder%2Dtop%3A%202px%20solid%20var%28%2D%2Dink%29%3B%0A%7D%0Ah1%2C%0Ah2%2C%0Ah3%2C%0Ah4%20%7B%0Amax%2Dwidth%3A%2025ch%3B%0Amargin%2Dtop%3A%200%3B%0Acolor%3A%20var%28%2D%2Dink%29%3B%0Afont%2Dfamily%3A%20var%28%2D%2Dserif%29%3B%0Afont%2Dweight%3A%20600%3B%0Aline%2Dheight%3A%201%2E05%3B%0Atext%2Dwrap%3A%20balance%3B%0A%7D%0Ah1%20%7B%0Amargin%2Dbottom%3A%20clamp%282rem%2C%204vw%2C%203%2E5rem%29%3B%0Afont%2Dsize%3A%20clamp%283rem%2C%207vw%2C%207%2E4rem%29%3B%0Aletter%2Dspacing%3A%20%2D0%2E055em%3B%0A%7D%0Asection%2Elevel1%3Anot%28%3Afirst%2Dof%2Dtype%29%20%3E%20h1%20%7B%0Adisplay%3A%20grid%3B%0Agrid%2Dtemplate%2Dcolumns%3A%20minmax%280%2C%201fr%29%20auto%3B%0Agap%3A%201rem%3B%0Aalign%2Ditems%3A%20start%3B%0Afont%2Dsize%3A%20clamp%282%2E8rem%2C%205vw%2C%205%2E6rem%29%3B%0A%7D%0Asection%2Elevel1%3Anot%28%3Afirst%2Dof%2Dtype%29%20%3E%20h1%3A%3Aafter%20%7B%0Acontent%3A%20counter%28section%2C%20decimal%2Dleading%2Dzero%29%3B%0Amin%2Dwidth%3A%202%2E2rem%3B%0Amargin%2Dtop%3A%200%2E35em%3B%0Acolor%3A%20var%28%2D%2Dsignal%29%3B%0Afont%2Dfamily%3A%20var%28%2D%2Dsans%29%3B%0Afont%2Dsize%3A%200%2E75rem%3B%0Afont%2Dweight%3A%20800%3B%0Aletter%2Dspacing%3A%200%2E08em%3B%0A%7D%0Abody%20%7B%0Acounter%2Dreset%3A%20section%20%2D1%3B%0A%7D%0Asection%2Elevel1%20%7B%0Acounter%2Dincrement%3A%20section%3B%0A%7D%0Ah2%20%7B%0Amargin%3A%20clamp%284rem%2C%207vw%2C%207rem%29%200%201%2E15rem%3B%0Apadding%2Dtop%3A%200%2E25rem%3B%0Afont%2Dsize%3A%20clamp%282rem%2C%203%2E4vw%2C%203%2E35rem%29%3B%0Aletter%2Dspacing%3A%20%2D0%2E035em%3B%0A%7D%0Ah3%20%7B%0Amargin%3A%203rem%200%200%2E85rem%3B%0Afont%2Dfamily%3A%20var%28%2D%2Dsans%29%3B%0Afont%2Dsize%3A%20clamp%281%2E25rem%2C%202vw%2C%201%2E55rem%29%3B%0Afont%2Dweight%3A%20760%3B%0Aletter%2Dspacing%3A%20%2D0%2E02em%3B%0Aline%2Dheight%3A%201%2E2%3B%0A%7D%0Ah4%20%7B%0Amargin%3A%202%2E25rem%200%200%2E7rem%3B%0Afont%2Dfamily%3A%20var%28%2D%2Dsans%29%3B%0Afont%2Dsize%3A%201rem%3B%0Afont%2Dweight%3A%20780%3B%0Aletter%2Dspacing%3A%200%2E01em%3B%0Aline%2Dheight%3A%201%2E3%3B%0A%7D%0Ap%2C%0Aul%2C%0Aol%2C%0Ablockquote%20%7B%0Amax%2Dwidth%3A%20var%28%2D%2Dmeasure%29%3B%0A%7D%0Ap%20%7B%0Amargin%3A%200%200%201%2E2rem%3B%0A%7D%0Ah1%20%2B%20p%2C%0Asection%2Elevel1%3Afirst%2Dof%2Dtype%20%3E%20p%3Afirst%2Dof%2Dtype%20%7B%0Amax%2Dwidth%3A%2052ch%3B%0Acolor%3A%20var%28%2D%2Dink%2Dsoft%29%3B%0Afont%2Dfamily%3A%20var%28%2D%2Dserif%29%3B%0Afont%2Dsize%3A%20clamp%281%2E25rem%2C%202%2E1vw%2C%201%2E75rem%29%3B%0Aline%2Dheight%3A%201%2E45%3B%0A%7D%0Aul%2C%0Aol%20%7B%0Amargin%3A%200%200%201%2E5rem%3B%0Apadding%2Dleft%3A%201%2E45rem%3B%0A%7D%0Ali%20%7B%0Amargin%3A%200%2E38rem%200%3B%0Apadding%2Dleft%3A%200%2E25rem%3B%0A%7D%0Ali%3A%3Amarker%20%7B%0Acolor%3A%20var%28%2D%2Dsignal%29%3B%0Afont%2Dweight%3A%20700%3B%0A%7D%0Astrong%20%7B%0Afont%2Dweight%3A%20760%3B%0A%7D%0Ahr%20%7B%0Amax%2Dwidth%3A%20var%28%2D%2Dmeasure%29%3B%0Amargin%3A%204rem%200%3B%0Aborder%3A%200%3B%0Aborder%2Dtop%3A%201px%20solid%20var%28%2D%2Dline%2Dstrong%29%3B%0A%7D%0Ablockquote%20%7B%0Amargin%3A%202rem%200%3B%0Apadding%3A%200%2E25rem%200%200%2E25rem%20clamp%281%2E25rem%2C%203vw%2C%202%2E25rem%29%3B%0Aborder%2Dleft%3A%204px%20solid%20var%28%2D%2Dsignal%29%3B%0Acolor%3A%20var%28%2D%2Dink%2Dsoft%29%3B%0Afont%2Dfamily%3A%20var%28%2D%2Dserif%29%3B%0Afont%2Dsize%3A%201%2E14rem%3B%0A%7D%0Acode%20%7B%0Apadding%3A%200%2E12em%200%2E32em%3B%0Aborder%3A%201px%20solid%20var%28%2D%2Dline%29%3B%0Aborder%2Dradius%3A%200%2E2rem%3B%0Abackground%3A%20var%28%2D%2Dpaper%2Draised%29%3B%0Afont%2Dfamily%3A%20var%28%2D%2Dmono%29%3B%0Afont%2Dsize%3A%200%2E84em%3B%0A%7D%0Apre%20%7B%0Amax%2Dwidth%3A%2088ch%3B%0Amargin%3A%201%2E8rem%200%202%2E5rem%3B%0Apadding%3A%20clamp%281%2E1rem%2C%202%2E5vw%2C%202rem%29%3B%0Aoverflow%3A%20auto%3B%0Aborder%2Dleft%3A%200%2E32rem%20solid%20var%28%2D%2Dsignal%29%3B%0Abackground%3A%20var%28%2D%2Dcode%29%3B%0Acolor%3A%20var%28%2D%2Dcode%2Dink%29%3B%0Abox%2Dshadow%3A%200%2E55rem%200%2E55rem%200%20var%28%2D%2Dwash%29%3B%0Afont%2Dsize%3A%20clamp%280%2E78rem%2C%201%2E4vw%2C%200%2E9rem%29%3B%0Aline%2Dheight%3A%201%2E62%3B%0Atab%2Dsize%3A%202%3B%0Awhite%2Dspace%3A%20pre%2Dwrap%3B%0Aoverflow%2Dwrap%3A%20anywhere%3B%0A%7D%0Apre%20code%20%7B%0Apadding%3A%200%3B%0Aborder%3A%200%3B%0Abackground%3A%20transparent%3B%0Acolor%3A%20inherit%3B%0Afont%2Dsize%3A%20inherit%3B%0A%7D%0Atable%20%7B%0Adisplay%3A%20block%3B%0Awidth%3A%20100%25%3B%0Amax%2Dwidth%3A%2076rem%3B%0Amargin%3A%201%2E8rem%200%203rem%3B%0Aoverflow%2Dx%3A%20auto%3B%0Aborder%2Dcollapse%3A%20collapse%3B%0Aborder%2Dtop%3A%202px%20solid%20var%28%2D%2Dink%29%3B%0Aborder%2Dbottom%3A%201px%20solid%20var%28%2D%2Dink%29%3B%0Afont%2Dsize%3A%200%2E91rem%3B%0Aline%2Dheight%3A%201%2E48%3B%0A%7D%0Athead%2C%0Atbody%2C%0Atr%20%7B%0Awidth%3A%20100%25%3B%0A%7D%0Ath%2C%0Atd%20%7B%0Amin%2Dwidth%3A%2010rem%3B%0Apadding%3A%200%2E82rem%201rem%200%2E9rem%200%3B%0Aborder%2Dbottom%3A%201px%20solid%20var%28%2D%2Dline%29%3B%0Atext%2Dalign%3A%20left%3B%0Avertical%2Dalign%3A%20top%3B%0A%7D%0Ath%20%7B%0Acolor%3A%20var%28%2D%2Dsignal%2Ddark%29%3B%0Afont%2Dsize%3A%200%2E7rem%3B%0Afont%2Dweight%3A%20800%3B%0Aletter%2Dspacing%3A%200%2E09em%3B%0Atext%2Dtransform%3A%20uppercase%3B%0A%7D%0Atbody%20tr%3Alast%2Dchild%20td%20%7B%0Aborder%2Dbottom%3A%200%3B%0A%7D%0Ainput%5Btype%3D%22checkbox%22%5D%20%7B%0Awidth%3A%201rem%3B%0Aheight%3A%201rem%3B%0Amargin%3A%200%200%2E5rem%200%20%2D1%2E4rem%3B%0Aaccent%2Dcolor%3A%20var%28%2D%2Dsignal%29%3B%0Avertical%2Dalign%3A%20%2D0%2E12rem%3B%0A%7D%0A%2Etask%2Dlist%2Ditem%20%7B%0Apadding%2Dleft%3A%200%2E25rem%3B%0Alist%2Dstyle%3A%20none%3B%0A%7D%0A%2Etask%2Dlist%2Ditem%20input%5Bdisabled%5D%20%7B%0Aopacity%3A%201%3B%0A%7D%0A%40media%20%28max%2Dwidth%3A%2058rem%29%20%7B%0Abody%20%7B%0Adisplay%3A%20block%3B%0Apadding%3A%201%2E1rem%20clamp%281rem%2C%205vw%2C%202%2E5rem%29%206rem%3B%0Abackground%3A%20var%28%2D%2Dpaper%29%3B%0A%7D%0Abody%3A%3Abefore%20%7B%0Adisplay%3A%20block%3B%0A%7D%0Amain%20%7B%0Adisplay%3A%20block%3B%0A%7D%0A%23TOC%20%7B%0Aposition%3A%20relative%3B%0Atop%3A%20auto%3B%0Amax%2Dheight%3A%20none%3B%0Amargin%3A%202rem%200%200%3B%0Apadding%3A%201rem%200%3B%0Acolumns%3A%202%2015rem%3B%0Acolumn%2Dgap%3A%202rem%3B%0A%7D%0A%23TOC%3A%3Abefore%2C%0A%23TOC%20%3E%20ul%20%3E%20li%20%7B%0Abreak%2Dinside%3A%20avoid%3B%0A%7D%0Asection%2Elevel1%20%7B%0Awidth%3A%20100%25%3B%0Apadding%2Dtop%3A%204%2E5rem%3B%0A%7D%0Ah1%20%7B%0Afont%2Dsize%3A%20clamp%282%2E75rem%2C%2012vw%2C%205%2E5rem%29%3B%0A%7D%0Asection%2Elevel1%3Anot%28%3Afirst%2Dof%2Dtype%29%20%3E%20h1%20%7B%0Adisplay%3A%20block%3B%0Afont%2Dsize%3A%20clamp%282%2E5rem%2C%2010vw%2C%204%2E5rem%29%3B%0A%7D%0Asection%2Elevel1%3Anot%28%3Afirst%2Dof%2Dtype%29%20%3E%20h1%3A%3Aafter%20%7B%0Adisplay%3A%20block%3B%0Amargin%2Dtop%3A%201rem%3B%0A%7D%0A%7D%0A%40media%20%28max%2Dwidth%3A%2036rem%29%20%7B%0A%23TOC%20%7B%0Acolumns%3A%201%3B%0A%7D%0Apre%20%7B%0Amargin%2Dinline%3A%20%2D0%2E35rem%3B%0Abox%2Dshadow%3A%200%2E35rem%200%2E35rem%200%20var%28%2D%2Dwash%29%3B%0A%7D%0Ath%2C%0Atd%20%7B%0Amin%2Dwidth%3A%2013rem%3B%0A%7D%0A%7D%0A%40media%20%28prefers%2Dreduced%2Dmotion%3A%20reduce%29%20%7B%0Ahtml%20%7B%0Ascroll%2Dbehavior%3A%20auto%3B%0A%7D%0A%2A%2C%0A%2A%3A%3Abefore%2C%0A%2A%3A%3Aafter%20%7B%0Ascroll%2Dbehavior%3A%20auto%20%21important%3B%0Atransition%2Dduration%3A%200%2E01ms%20%21important%3B%0Aanimation%2Dduration%3A%200%2E01ms%20%21important%3B%0Aanimation%2Diteration%2Dcount%3A%201%20%21important%3B%0A%7D%0A%7D%0A%40media%20%28prefers%2Dcontrast%3A%20more%29%20%7B%0A%3Aroot%20%7B%0A%2D%2Dpaper%3A%20%23fff%3B%0A%2D%2Dpaper%2Draised%3A%20%23fff%3B%0A%2D%2Dink%3A%20%23000%3B%0A%2D%2Dink%2Dsoft%3A%20%231c1c1c%3B%0A%2D%2Dline%3A%20%23676767%3B%0A%2D%2Dsignal%3A%20%23a62413%3B%0A%2D%2Dsignal%2Ddark%3A%20%2374180c%3B%0A%7D%0A%7D%0A%40media%20print%20%7B%0A%40page%20%7B%0Asize%3A%20A4%3B%0Amargin%3A%2017mm%2016mm%2020mm%3B%0A%7D%0A%3Aroot%20%7B%0A%2D%2Dpaper%3A%20%23fff%3B%0A%2D%2Dpaper%2Draised%3A%20%23fff%3B%0A%2D%2Dink%3A%20%23111%3B%0A%2D%2Dink%2Dsoft%3A%20%23333%3B%0A%2D%2Dline%3A%20%23aaa%3B%0A%2D%2Dline%2Dstrong%3A%20%23555%3B%0A%2D%2Dsignal%3A%20%238c2c1d%3B%0A%2D%2Dsignal%2Ddark%3A%20%23681d13%3B%0A%7D%0Ahtml%2C%0Abody%20%7B%0Abackground%3A%20%23fff%3B%0A%7D%0Abody%20%7B%0Adisplay%3A%20block%3B%0Amax%2Dwidth%3A%20none%3B%0Apadding%3A%200%3B%0Afont%2Dsize%3A%209%2E5pt%3B%0Aline%2Dheight%3A%201%2E5%3B%0A%7D%0Abody%3A%3Abefore%20%7B%0Adisplay%3A%20block%3B%0Amargin%2Dbottom%3A%2012mm%3B%0A%7D%0A%23TOC%20%7B%0Aposition%3A%20static%3B%0Amax%2Dheight%3A%20none%3B%0Amargin%3A%200%200%2014mm%3B%0Apadding%3A%204mm%200%3B%0Acolumns%3A%202%3B%0Abreak%2Dafter%3A%20page%3B%0A%7D%0A%23TOC%20a%20%7B%0Acolor%3A%20var%28%2D%2Dink%29%3B%0A%7D%0Asection%2Elevel1%20%7B%0Awidth%3A%20auto%3B%0Apadding%2Dtop%3A%200%3B%0A%7D%0Asection%2Elevel1%20%2B%20section%2Elevel1%20%7B%0Amargin%2Dtop%3A%200%3B%0Apadding%2Dtop%3A%208mm%3B%0Abreak%2Dbefore%3A%20page%3B%0A%7D%0Ah1%20%7B%0Afont%2Dsize%3A%2032pt%3B%0A%7D%0Asection%2Elevel1%3Anot%28%3Afirst%2Dof%2Dtype%29%20%3E%20h1%20%7B%0Afont%2Dsize%3A%2027pt%3B%0A%7D%0Ah2%20%7B%0Amargin%2Dtop%3A%2012mm%3B%0Afont%2Dsize%3A%2020pt%3B%0Abreak%2Dafter%3A%20avoid%3B%0A%7D%0Ah3%2C%0Ah4%20%7B%0Abreak%2Dafter%3A%20avoid%3B%0A%7D%0Apre%2C%0Ablockquote%2C%0Atable%20%7B%0Abreak%2Dinside%3A%20avoid%3B%0A%7D%0Apre%20%7B%0Aborder%3A%201px%20solid%20%23333%3B%0Aborder%2Dleft%3A%203px%20solid%20var%28%2D%2Dsignal%29%3B%0Abox%2Dshadow%3A%20none%3B%0Awhite%2Dspace%3A%20pre%2Dwrap%3B%0A%7D%0Aa%5Bhref%5E%3D%22http%22%5D%3A%3Aafter%20%7B%0Acontent%3A%20%22%20%3C%22%20attr%28href%29%20%22%3E%22%3B%0Acolor%3A%20var%28%2D%2Dink%2Dsoft%29%3B%0Afont%2Dfamily%3A%20var%28%2D%2Dsans%29%3B%0Afont%2Dsize%3A%200%2E78em%3B%0Afont%2Dweight%3A%20400%3B%0Aoverflow%2Dwrap%3A%20anywhere%3B%0A%7D%0A%23TOC%20a%3A%3Aafter%20%7B%0Acontent%3A%20none%3B%0A%7D%0A%7D%0A" />
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to the manual</a>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#the-non-vibe-coded-frontend-design-kit">The Non-Vibe-Coded Frontend Design Kit</a>
+<ul>
+<li><a href="#start-here">Start here</a></li>
+<li><a href="#contents">Contents</a></li>
+<li><a href="#the-short-version">The short version</a></li>
+<li><a href="#attribution">Attribution</a></li>
+</ul></li>
+<li><a href="#the-non-vibe-coded-frontend-design-playbook">The Non-Vibe-Coded Frontend Design Playbook</a>
+<ul>
+<li><a href="#what-non-vibe-coded-means">What &quot;non-vibe-coded&quot; means</a></li>
+<li><a href="#1-begin-with-design-context">1. Begin with design context</a></li>
+<li><a href="#2-choose-a-strong-visual-direction">2. Choose a strong visual direction</a></li>
+<li><a href="#3-make-a-compact-design-system-first">3. Make a compact design system first</a></li>
+<li><a href="#4-typography-carries-personality">4. Typography carries personality</a></li>
+<li><a href="#5-use-color-as-a-system">5. Use color as a system</a></li>
+<li><a href="#6-build-spatial-rhythm-not-uniform-padding">6. Build spatial rhythm, not uniform padding</a></li>
+<li><a href="#7-treat-words-as-interface-components">7. Treat words as interface components</a></li>
+<li><a href="#8-design-all-interaction-states">8. Design all interaction states</a></li>
+<li><a href="#9-use-motion-to-explain-change">9. Use motion to explain change</a></li>
+<li><a href="#10-adapt-do-not-merely-shrink">10. Adapt, do not merely shrink</a></li>
+<li><a href="#11-use-component-libraries-as-raw-material">11. Use component libraries as raw material</a></li>
+<li><a href="#12-add-3d-only-when-it-earns-its-cost">12. Add 3D only when it earns its cost</a></li>
+<li><a href="#13-keep-implementation-disciplined">13. Keep implementation disciplined</a></li>
+<li><a href="#14-refine-with-focused-passes">14. Refine with focused passes</a></li>
+<li><a href="#15-review-screenshots-not-intentions">15. Review screenshots, not intentions</a></li>
+<li><a href="#the-final-standard">The final standard</a></li>
+</ul></li>
+<li><a href="#ui-and-frontend-skill-map">UI and Frontend Skill Map</a>
+<ul>
+<li><a href="#core-direction">Core direction</a></li>
+<li><a href="#focused-aesthetic-passes">Focused aesthetic passes</a></li>
+<li><a href="#critique-and-quality">Critique and quality</a></li>
+<li><a href="#advanced-visual-implementation">Advanced visual implementation</a></li>
+<li><a href="#recommended-sequence">Recommended sequence</a></li>
+<li><a href="#the-principle-behind-the-map">The principle behind the map</a></li>
+</ul></li>
+<li><a href="#frontend-design-prompt-pack">Frontend Design Prompt Pack</a>
+<ul>
+<li><a href="#1-design-context-interview">1. Design context interview</a></li>
+<li><a href="#2-master-design-and-build-prompt">2. Master design and build prompt</a></li>
+<li><a href="#3-art-direction-prompt">3. Art-direction prompt</a></li>
+<li><a href="#4-anti-generic-review">4. Anti-generic review</a></li>
+<li><a href="#5-distill-pass">5. Distill pass</a></li>
+<li><a href="#6-bolder-pass">6. Bolder pass</a></li>
+<li><a href="#7-quieter-pass">7. Quieter pass</a></li>
+<li><a href="#8-motion-pass">8. Motion pass</a></li>
+<li><a href="#9-screenshot-critique">9. Screenshot critique</a></li>
+<li><a href="#10-production-hardening-prompt">10. Production hardening prompt</a></li>
+<li><a href="#11-pre-delivery-verification-prompt">11. Pre-delivery verification prompt</a></li>
+</ul></li>
+<li><a href="#frontend-design-checklists">Frontend Design Checklists</a>
+<ul>
+<li><a href="#five-minute-anti-vibe-check">Five-minute anti-vibe check</a></li>
+<li><a href="#visual-system">Visual system</a></li>
+<li><a href="#components-and-interaction">Components and interaction</a></li>
+<li><a href="#motion">Motion</a></li>
+<li><a href="#responsive-and-content-resilience">Responsive and content resilience</a></li>
+<li><a href="#accessibility">Accessibility</a></li>
+<li><a href="#performance">Performance</a></li>
+<li><a href="#production-resilience">Production resilience</a></li>
+<li><a href="#final-critique">Final critique</a></li>
+</ul></li>
+<li><a href="#public-frontend-design-references">Public Frontend Design References</a>
+<ul>
+<li><a href="#foundations">Foundations</a></li>
+<li><a href="#components-and-icons">Components and icons</a></li>
+<li><a href="#motion-1">Motion</a></li>
+<li><a href="#3d-and-immersive-web">3D and immersive web</a></li>
+<li><a href="#testing-and-quality">Testing and quality</a></li>
+<li><a href="#inspiration-without-copying">Inspiration without copying</a></li>
+<li><a href="#suggested-reading">Suggested reading</a></li>
+</ul></li>
+</ul>
+</nav>
+<main id="main-content">
+<section id="the-non-vibe-coded-frontend-design-kit" class="level1">
+<h1>The Non-Vibe-Coded Frontend Design Kit</h1>
+<p>A practical system for making distinctive, production-grade websites with AI-assisted coding.</p>
+<p>This kit is not a component dump or a list of trendy effects. It is a design process. It helps you make choices that are specific to the product, build those choices into a coherent system, and verify that the result is usable, responsive, accessible, and fast.</p>
+<section id="start-here" class="level2">
+<h2>Start here</h2>
+<p>If you have 15 minutes:</p>
+<ol type="1">
+<li>Read the definition of a non-vibe-coded interface in <code>PLAYBOOK.md</code>.</li>
+<li>Fill in the brief in <code>PROMPT-PACK.md</code>.</li>
+<li>Use the master build prompt from that file.</li>
+<li>Run the compact pre-delivery checklist in <code>CHECKLISTS.md</code>.</li>
+</ol>
+<p>If you are building a real product, use the full workflow:</p>
+<ol type="1">
+<li>Context and brief</li>
+<li>Visual direction</li>
+<li>Design tokens and system</li>
+<li>Functional implementation</li>
+<li>Focused refinement passes</li>
+<li>Visual, accessibility, performance, and resilience checks</li>
+</ol>
+</section>
+<section id="contents" class="level2">
+<h2>Contents</h2>
+<ul>
+<li><code>PLAYBOOK.md</code> contains the complete design method.</li>
+<li><code>SKILL-MAP.md</code> explains the design skills and when to use each one.</li>
+<li><code>PROMPT-PACK.md</code> contains reusable prompts for AI coding tools.</li>
+<li><code>CHECKLISTS.md</code> contains review and shipping checklists.</li>
+<li><code>REFERENCES.md</code> contains public design and frontend resources.</li>
+</ul>
+</section>
+<section id="the-short-version" class="level2">
+<h2>The short version</h2>
+<p>Good AI-assisted frontend work follows the same standard as good human frontend work:</p>
+<ul>
+<li>Begin with a real audience, job, and point of view.</li>
+<li>Pick one memorable idea and execute it precisely.</li>
+<li>Use typography, spacing, content, and interaction as design materials.</li>
+<li>Build a small token system before styling individual components.</li>
+<li>Reuse accessible primitives, then customize them to the brief.</li>
+<li>Review screenshots, not just code.</li>
+<li>Test the awkward states, not only the polished happy path.</li>
+<li>Measure performance and accessibility before calling it finished.</li>
+</ul>
+</section>
+<section id="attribution" class="level2">
+<h2>Attribution</h2>
+<p>This is an original synthesis of working methods from Amit&#39;s installed design workflows and public frontend resources. It summarizes ideas rather than redistributing the original skill files. The public tools and libraries retain their own licenses and terms.</p>
+</section>
+</section>
+<section id="the-non-vibe-coded-frontend-design-playbook" class="level1">
+<h1>The Non-Vibe-Coded Frontend Design Playbook</h1>
+<section id="what-non-vibe-coded-means" class="level2">
+<h2>What &quot;non-vibe-coded&quot; means</h2>
+<p>Vibe coding becomes a problem when the interface is assembled from plausible defaults without a clear reason for its choices. It may function, but it feels interchangeable. The page could belong to any startup, the copy says nothing specific, and visual effects substitute for hierarchy.</p>
+<p>A non-vibe-coded interface has evidence of judgment:</p>
+<ul>
+<li>The visual language comes from the subject matter and audience.</li>
+<li>The hierarchy reflects actual user priorities.</li>
+<li>Color, type, space, imagery, and motion have named jobs.</li>
+<li>Repeated patterns use a system, while memorable moments are intentionally unique.</li>
+<li>The interface works beyond the ideal screenshot.</li>
+<li>Accessibility, responsiveness, performance, and error states are part of the design.</li>
+</ul>
+<p>The goal is not to hide the use of AI. The goal is to remove unexamined defaults.</p>
+</section>
+<section id="1-begin-with-design-context" class="level2">
+<h2>1. Begin with design context</h2>
+<p>Do not choose colors, fonts, or components until you can answer:</p>
+<ul>
+<li>Who uses this product?</li>
+<li>What are they trying to accomplish?</li>
+<li>What situation are they in when they use it?</li>
+<li>What should the experience make them feel?</li>
+<li>What three words describe the brand personality?</li>
+<li>What must the design communicate in its first two seconds?</li>
+<li>What must it never resemble?</li>
+<li>What technical, accessibility, performance, or brand constraints are fixed?</li>
+</ul>
+<p>Write the answers into the project, ideally in <code>AGENTS.md</code>, <code>CLAUDE.md</code>, or a dedicated design brief. Persistent context prevents the design from drifting between sessions.</p>
+<section id="use-references-and-anti-references" class="level3">
+<h3>Use references and anti-references</h3>
+<p>Ask for two or three references and identify the precise quality that matters. &quot;Like Linear&quot; is weak. &quot;The density and keyboard-first interaction of Linear, but not its dark palette&quot; is useful.</p>
+<p>Anti-references are equally valuable. State what the result must avoid. Examples include glossy SaaS cards, editorial layouts, playful motion, dense dashboards, or luxury minimalism. An anti-reference closes common escape routes into generic output.</p>
+</section>
+</section>
+<section id="2-choose-a-strong-visual-direction" class="level2">
+<h2>2. Choose a strong visual direction</h2>
+<p>Write a one-paragraph creative concept before opening the component library. It should connect the product&#39;s world to a design idea.</p>
+<p>A strong direction contains:</p>
+<ul>
+<li>Purpose: the user problem and primary action.</li>
+<li>Tone: a specific aesthetic and emotional register.</li>
+<li>Materials: visual cues from the subject&#39;s real world.</li>
+<li>Constraints: stack, browser support, accessibility, and performance.</li>
+<li>Signature: the one moment or element people should remember.</li>
+</ul>
+<section id="spend-boldness-in-one-place" class="level3">
+<h3>Spend boldness in one place</h3>
+<p>The memorable element may be a typographic hero, interactive diagram, unusual navigation model, full-bleed photograph, spatial composition, or carefully staged animation. Pick one. Keep the surrounding system disciplined enough to let it land.</p>
+</section>
+<section id="run-the-interchangeability-test" class="level3">
+<h3>Run the interchangeability test</h3>
+<p>Replace the product name and copy with another company&#39;s. If the page still feels equally appropriate, the direction is too generic.</p>
+</section>
+<section id="common-generated-design-tells" class="level3">
+<h3>Common generated-design tells</h3>
+<p>Treat these as choices that require justification, not defaults:</p>
+<ul>
+<li>Purple-to-blue gradients and cyan accents on dark backgrounds.</li>
+<li>Gradient text used as automatic emphasis.</li>
+<li>Warm cream, high-contrast serif, and terracotta used without a subject-specific reason.</li>
+<li>Acid green on near-black used as instant &quot;edgy&quot; branding.</li>
+<li>Identical rounded cards with soft shadows.</li>
+<li>A large icon in a rounded square above every heading.</li>
+<li>All-caps eyebrow labels above every section.</li>
+<li>Monospace labels added to make an interface feel technical.</li>
+<li>Every section centered and every feature given the same weight.</li>
+<li>Decorative sparklines, glass panels, glow borders, and floating blobs.</li>
+<li>Repeated fade-and-slide entrances on every section.</li>
+<li>Fake metrics or testimonials written only to occupy a template.</li>
+</ul>
+<p>None of these devices is forbidden. The test is whether the brief demands them.</p>
+</section>
+</section>
+<section id="3-make-a-compact-design-system-first" class="level2">
+<h2>3. Make a compact design system first</h2>
+<p>Create a token sheet before styling individual components. A useful minimum system includes:</p>
+<ul>
+<li>Four to six named core colors.</li>
+<li>Semantic colors for success, warning, error, and information.</li>
+<li>One or two type families with assigned roles.</li>
+<li>Five useful type sizes with clear contrast.</li>
+<li>A 4-point spacing scale.</li>
+<li>Two or three radii, not one radius on everything.</li>
+<li>A small elevation system.</li>
+<li>Motion durations and easing curves.</li>
+<li>Container widths and content measures.</li>
+</ul>
+<p>Use semantic names such as <code>surface-raised</code>, <code>text-muted</code>, <code>action-primary</code>, and <code>space-section</code>. Avoid value-based names that expose implementation details.</p>
+<section id="primitive-and-semantic-layers" class="level3">
+<h3>Primitive and semantic layers</h3>
+<p>Keep raw values separate from their jobs. A primitive may be <code>blue-600</code>; a semantic token may be <code>action-primary</code>. Dark mode and future themes should mainly redefine semantic tokens.</p>
+</section>
+</section>
+<section id="4-typography-carries-personality" class="level2">
+<h2>4. Typography carries personality</h2>
+<p>Typography usually contributes more personality than decoration.</p>
+<section id="selection" class="level3">
+<h3>Selection</h3>
+<ul>
+<li>Choose one strong family before adding a second.</li>
+<li>Use a second family only when it adds meaningful contrast.</li>
+<li>Avoid pairing two similar geometric sans-serif families.</li>
+<li>Use display faces for short, controlled text, never long body copy.</li>
+<li>Load only the weights and character sets you actually use.</li>
+<li>Provide metric-compatible fallbacks to reduce layout shift.</li>
+</ul>
+<p>Common default fonts are not inherently bad, but they do not provide differentiation by themselves. If the product needs identity, make a deliberate choice.</p>
+</section>
+<section id="scale-and-hierarchy" class="level3">
+<h3>Scale and hierarchy</h3>
+<ul>
+<li>Use fewer sizes with bigger differences.</li>
+<li>Use a modular relationship rather than a cloud of adjacent values.</li>
+<li>Keep body text at least 1rem and respect browser zoom.</li>
+<li>Use <code>clamp()</code> for large display type and fluid editorial text.</li>
+<li>Keep most prose below about 65 to 75 characters per line.</li>
+<li>Increase line-height slightly for light text on dark surfaces.</li>
+<li>Use tabular numerals for aligned data.</li>
+</ul>
+<p>Avoid accenting one arbitrary word in every heading. Make the whole typographic composition carry the emphasis.</p>
+</section>
+</section>
+<section id="5-use-color-as-a-system" class="level2">
+<h2>5. Use color as a system</h2>
+<p>Color should communicate hierarchy, state, category, or brand emotion.</p>
+<section id="palette-rules" class="level3">
+<h3>Palette rules</h3>
+<ul>
+<li>Prefer OKLCH for perceptually consistent scales.</li>
+<li>Tint neutrals toward the brand hue.</li>
+<li>Let one accent remain rare enough to feel important.</li>
+<li>Reduce chroma as colors approach white or black.</li>
+<li>Define explicit surface colors instead of stacking transparency everywhere.</li>
+<li>Design dark mode separately. Depth in dark mode usually comes from lighter surfaces, not heavier shadows.</li>
+</ul>
+</section>
+<section id="accessibility-rules" class="level3">
+<h3>Accessibility rules</h3>
+<ul>
+<li>Body text should meet at least 4.5:1 contrast.</li>
+<li>Large text and essential UI graphics should meet at least 3:1.</li>
+<li>Placeholder text is still text and must remain readable.</li>
+<li>Do not use color as the only indicator of state.</li>
+<li>Test color-blindness simulations and high-contrast modes.</li>
+</ul>
+<p>Avoid gray text on colored backgrounds. Use a darker or lighter relative of the background hue.</p>
+</section>
+</section>
+<section id="6-build-spatial-rhythm-not-uniform-padding" class="level2">
+<h2>6. Build spatial rhythm, not uniform padding</h2>
+<p>Use a 4-point base scale with intentional jumps, such as 4, 8, 12, 16, 24, 32, 48, 64, and 96 pixels.</p>
+<section id="hierarchy-through-space" class="level3">
+<h3>Hierarchy through space</h3>
+<ul>
+<li>Keep related items close.</li>
+<li>Separate conceptual groups generously.</li>
+<li>Combine size, weight, color, position, and space to create hierarchy.</li>
+<li>Use asymmetry when it reinforces the reading order.</li>
+<li>Break the grid only where the break creates emphasis.</li>
+<li>Use <code>gap</code> for sibling spacing and reserve margins for larger structural relationships.</li>
+</ul>
+</section>
+<section id="cards-are-not-layout" class="level3">
+<h3>Cards are not layout</h3>
+<p>Use cards when items are independent, comparable, actionable, or movable. Do not use a card merely because content needs spacing. Avoid nesting cards inside cards. Typography, alignment, dividers, and whitespace often create stronger grouping.</p>
+</section>
+<section id="the-squint-test" class="level3">
+<h3>The squint test</h3>
+<p>Blur or shrink a screenshot. You should still see the primary element, secondary element, and major groups. If every block has equal weight, the hierarchy is unfinished.</p>
+</section>
+</section>
+<section id="7-treat-words-as-interface-components" class="level2">
+<h2>7. Treat words as interface components</h2>
+<p>Copy is not filler.</p>
+<ul>
+<li>Use the user&#39;s vocabulary, not internal system terms.</li>
+<li>Use active voice and sentence case.</li>
+<li>Name actions with a clear verb and object.</li>
+<li>Keep action names consistent through the whole flow.</li>
+<li>Remove introductions that repeat their heading.</li>
+<li>Write empty states that explain value and offer a next action.</li>
+<li>Write errors that say what happened and how to recover.</li>
+<li>Do not use jokes when the user is blocked or has lost work.</li>
+<li>Write link text that makes sense out of context.</li>
+<li>Allow 30 to 40 percent expansion for translation.</li>
+</ul>
+<p>&quot;Save changes&quot; is better than &quot;Submit.&quot; &quot;Delete 5 files&quot; is better than &quot;Yes.&quot;</p>
+</section>
+<section id="8-design-all-interaction-states" class="level2">
+<h2>8. Design all interaction states</h2>
+<p>Every interactive component needs a defined default, hover, focus, active, disabled, loading, error, and success state.</p>
+<section id="interaction-principles" class="level3">
+<h3>Interaction principles</h3>
+<ul>
+<li>Use native HTML controls whenever they can do the job.</li>
+<li>Keep keyboard focus visible with <code>:focus-visible</code>.</li>
+<li>Make touch targets at least 44 by 44 CSS pixels when practical.</li>
+<li>Never rely on hover for essential information or actions.</li>
+<li>Validate forms after a field is left, not on every keystroke, unless live validation is genuinely helpful.</li>
+<li>Connect errors to their fields programmatically.</li>
+<li>Prefer skeletons that preview content shape over anonymous spinners.</li>
+<li>Use optimistic updates for reversible, low-risk actions.</li>
+<li>Prefer undo over confirmation for recoverable deletion.</li>
+<li>Use native <code>dialog</code>, popover, <code>details</code>, and semantic elements where appropriate.</li>
+</ul>
+<p>If a gesture exists, provide a visible alternative. Invisible interactions are not discoverable.</p>
+</section>
+</section>
+<section id="9-use-motion-to-explain-change" class="level2">
+<h2>9. Use motion to explain change</h2>
+<p>Motion should provide feedback, maintain spatial continuity, direct attention, or create one signature moment.</p>
+<section id="a-practical-timing-system" class="level3">
+<h3>A practical timing system</h3>
+<ul>
+<li>100 to 150ms for direct feedback.</li>
+<li>200 to 300ms for menus, tooltips, and small state changes.</li>
+<li>300 to 500ms for drawers, dialogs, and layout changes.</li>
+<li>500 to 800ms for a deliberate entrance sequence.</li>
+<li>Make exits shorter than entrances.</li>
+</ul>
+<p>Use decelerating curves for entrances and accelerating curves for exits. Avoid bounce and elastic easing by default. Springy motion can work for a playful brand when the interaction and physical metaphor clearly support it.</p>
+<p>Prefer transforms and opacity. Avoid animating width, height, padding, and margin. For collapsible content, use grid row transitions or a purpose-built layout animation system.</p>
+</section>
+<section id="one-orchestrated-moment" class="level3">
+<h3>One orchestrated moment</h3>
+<p>A single page-load composition, scroll-linked story, or product interaction is more memorable than motion sprinkled across every card. Cap stagger sequences so the user never waits for the interface.</p>
+<p>Always respect <code>prefers-reduced-motion</code>. Preserve state feedback even when spatial movement is removed.</p>
+</section>
+</section>
+<section id="10-adapt-do-not-merely-shrink" class="level2">
+<h2>10. Adapt, do not merely shrink</h2>
+<p>Responsive design changes composition and interaction according to available space and input method.</p>
+<ul>
+<li>Start mobile-first and add complexity with <code>min-width</code> queries.</li>
+<li>Let content determine breakpoints.</li>
+<li>Use container queries for reusable components.</li>
+<li>Use <code>clamp()</code> for fluid space and display type.</li>
+<li>Query pointer and hover capability, not only viewport size.</li>
+<li>Support safe-area insets on modern phones.</li>
+<li>Provide responsive images with <code>srcset</code>, <code>sizes</code>, and art-directed <code>picture</code> sources when necessary.</li>
+<li>Preserve critical functionality on mobile.</li>
+<li>Test 320px, 768px, 1024px, and wide desktop layouts as a minimum sweep.</li>
+<li>Test on real touch hardware and at 200 percent zoom.</li>
+</ul>
+</section>
+<section id="11-use-component-libraries-as-raw-material" class="level2">
+<h2>11. Use component libraries as raw material</h2>
+<p>Accessible primitives save time. They do not supply art direction.</p>
+<p>Use libraries such as shadcn/ui for behavior and structure, icon libraries for consistent geometry, and animation libraries for complex choreography. Then restyle, simplify, and compose them according to the brief.</p>
+<p>Do not combine components merely because they look impressive in isolation. A copied background effect, moving border, 3D card, and typewriter headline rarely form a coherent identity together.</p>
+<section id="a-useful-rule" class="level3">
+<h3>A useful rule</h3>
+<p>Borrow behavior. Design the surface.</p>
+</section>
+</section>
+<section id="12-add-3d-only-when-it-earns-its-cost" class="level2">
+<h2>12. Add 3D only when it earns its cost</h2>
+<p>3D is valuable for product visualization, spatial explanation, configuration, education, and genuinely immersive storytelling.</p>
+<p>Ask whether a photograph, illustration, or video would communicate the idea more clearly. If not, choose the lightest suitable stack:</p>
+<ul>
+<li>Spline for quick visual authoring and embeds.</li>
+<li>React Three Fiber for React-native scene composition.</li>
+<li>Three.js for maximum control.</li>
+<li>Babylon.js for heavier game-like applications.</li>
+</ul>
+<p>Keep web models compact, prefer GLB or glTF, reduce geometry and material count, compress textures, lazy-load the scene, show progress, and provide a static fallback. Test battery, heat, memory, and low-end mobile performance.</p>
+<p>Random floating geometry is not a concept.</p>
+</section>
+<section id="13-keep-implementation-disciplined" class="level2">
+<h2>13. Keep implementation disciplined</h2>
+<p>Visual quality collapses when the code is fragile.</p>
+<ul>
+<li>Use semantic HTML before ARIA.</li>
+<li>Keep component APIs small and composable.</li>
+<li>Use tokens instead of one-off values.</li>
+<li>Avoid deep wrapper trees and specificity fights.</li>
+<li>Reserve image dimensions to prevent layout shift.</li>
+<li>Lazy-load below-the-fold media and heavy experiences.</li>
+<li>Split large routes and components.</li>
+<li>Keep animation work off layout properties.</li>
+<li>Preserve visible loading, empty, error, offline, and permission states.</li>
+<li>Test long content, short content, no content, large numbers, RTL, CJK, slow networks, and failed requests.</li>
+</ul>
+</section>
+<section id="14-refine-with-focused-passes" class="level2">
+<h2>14. Refine with focused passes</h2>
+<p>Do not ask an AI tool to &quot;make it better.&quot; Run narrow passes with a named purpose.</p>
+<section id="distill" class="level3">
+<h3>Distill</h3>
+<p>Remove redundant copy, competing actions, decorative containers, unnecessary variants, and extra steps. Preserve the user&#39;s primary goal.</p>
+</section>
+<section id="bolder" class="level3">
+<h3>Bolder</h3>
+<p>Increase contrast in scale, composition, type, or color. Choose one focal point and push it. Do not add generic effects.</p>
+</section>
+<section id="quieter" class="level3">
+<h3>Quieter</h3>
+<p>Reduce saturation, visual weight, decoration, and motion while preserving hierarchy and identity.</p>
+</section>
+<section id="colorize" class="level3">
+<h3>Colorize</h3>
+<p>Add color for meaning, wayfinding, hierarchy, or warmth. Define where each color is allowed to appear.</p>
+</section>
+<section id="animate" class="level3">
+<h3>Animate</h3>
+<p>Add feedback and spatial continuity. Choose one signature moment and a small motion token system.</p>
+</section>
+<section id="delight" class="level3">
+<h3>Delight</h3>
+<p>Add one context-specific surprise, helpful flourish, or rewarding response. Delight should never slow down the main task.</p>
+</section>
+<section id="normalize" class="level3">
+<h3>Normalize</h3>
+<p>Replace one-off styling and components with the design system&#39;s tokens, patterns, and accessible primitives.</p>
+</section>
+<section id="adapt" class="level3">
+<h3>Adapt</h3>
+<p>Rethink the layout and interaction for mobile, touch, tablet, wide desktop, print, or email.</p>
+</section>
+<section id="harden-and-optimize" class="level3">
+<h3>Harden and optimize</h3>
+<p>Test production data, failures, translation, assistive technology, and slow devices. Measure performance before and after.</p>
+</section>
+</section>
+<section id="15-review-screenshots-not-intentions" class="level2">
+<h2>15. Review screenshots, not intentions</h2>
+<p>Run two separate reviews.</p>
+<section id="design-critique" class="level3">
+<h3>Design critique</h3>
+<p>Evaluate:</p>
+<ul>
+<li>First impression and clarity in two seconds.</li>
+<li>Primary task and interaction affordances.</li>
+<li>Reading order and visual hierarchy.</li>
+<li>Consistency with the token system.</li>
+<li>Typography, spacing, color, and content.</li>
+<li>Whether the design feels specific to the brief.</li>
+</ul>
+</section>
+<section id="production-audit" class="level3">
+<h3>Production audit</h3>
+<p>Evaluate:</p>
+<ul>
+<li>Keyboard navigation and focus.</li>
+<li>Screen-reader names and semantic structure.</li>
+<li>Contrast, zoom, and reduced motion.</li>
+<li>Loading, empty, error, offline, and permission states.</li>
+<li>Responsive layouts and real devices.</li>
+<li>Core Web Vitals, bundle cost, image cost, and runtime smoothness.</li>
+<li>Critical E2E flows in Chromium, Firefox, WebKit, and a mobile profile.</li>
+</ul>
+<p>When LCP is slow, separate server response time, resource discovery delay, resource transfer time, and element render delay before changing code. A preload will not solve a slow server, and image compression will not solve delayed client rendering.</p>
+<p>Take screenshots at representative widths. Compare against references when fidelity matters. Iterate until the major differences are intentional.</p>
+</section>
+</section>
+<section id="the-final-standard" class="level2">
+<h2>The final standard</h2>
+<p>The interface is ready when:</p>
+<ul>
+<li>Its concept can be explained in one sentence.</li>
+<li>The first screen communicates the right thing.</li>
+<li>One detail is memorable and the rest is disciplined.</li>
+<li>Components share a coherent system without looking mechanically repeated.</li>
+<li>The copy is specific and useful.</li>
+<li>The important states are designed and implemented.</li>
+<li>It works with keyboard, touch, reduced motion, zoom, and slow networks.</li>
+<li>It is tested at mobile and desktop widths.</li>
+<li>A screenshot review finds no accidental generic defaults.</li>
+<li>Performance and accessibility have been measured, not guessed.</li>
+</ul>
+</section>
+</section>
+<section id="ui-and-frontend-skill-map" class="level1">
+<h1>UI and Frontend Skill Map</h1>
+<p>These are the design workflows that informed this kit. The exact commands vary by AI environment, but the sequence and responsibilities transfer to any tool.</p>
+<section id="core-direction" class="level2">
+<h2>Core direction</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Skill</th>
+<th>Use it for</th>
+<th>Main contribution</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>frontend-design</code> and <code>frontend-design:frontend-design</code></td>
+<td>New pages, components, and visual redesigns</td>
+<td>Brief-specific art direction, distinctive type, color, composition, anti-template checks</td>
+</tr>
+<tr class="even">
+<td><code>teach-impeccable</code></td>
+<td>One-time project setup</td>
+<td>Captures users, product purpose, brand personality, references, anti-references, and constraints as persistent design context</td>
+</tr>
+<tr class="odd">
+<td><code>anthropic-skills:ui-ux-pro-max</code></td>
+<td>Early research and stack guidance</td>
+<td>Searchable recommendations for product types, styles, palettes, font pairings, charts, UX rules, and framework-specific implementation</td>
+</tr>
+<tr class="even">
+<td><code>design:design-system</code></td>
+<td>Auditing, documenting, or extending a system</td>
+<td>Tokens, component variants, states, patterns, naming, accessibility, and migration discipline</td>
+</tr>
+<tr class="odd">
+<td><code>normalize</code></td>
+<td>Bringing a feature back into the system</td>
+<td>Replaces one-offs with shared tokens, components, motion, and interaction patterns</td>
+</tr>
+<tr class="even">
+<td><code>design:design-handoff</code></td>
+<td>Converting design intent into a buildable specification</td>
+<td>Documents tokens, states, responsive behavior, motion, edge cases, and accessibility for implementation</td>
+</tr>
+<tr class="odd">
+<td><code>design:ux-copy</code></td>
+<td>Interface language and content states</td>
+<td>Clear actions, errors, empty states, confirmations, loading language, terminology, and localization</td>
+</tr>
+<tr class="even">
+<td><code>coding-standards</code></td>
+<td>Keeping the implementation maintainable</td>
+<td>Type safety, small components, clear state, lazy loading, error handling, testing, KISS, DRY, and YAGNI</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="focused-aesthetic-passes" class="level2">
+<h2>Focused aesthetic passes</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Skill</th>
+<th>Use it when</th>
+<th>Guardrail</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>distill</code></td>
+<td>The page is cluttered or over-explained</td>
+<td>Remove obstacles, not necessary capability</td>
+</tr>
+<tr class="even">
+<td><code>bolder</code></td>
+<td>The work is safe, flat, or forgettable</td>
+<td>Increase contrast and commitment, not the number of effects</td>
+</tr>
+<tr class="odd">
+<td><code>quieter</code></td>
+<td>The design is loud or visually tiring</td>
+<td>Preserve identity and hierarchy while reducing intensity</td>
+</tr>
+<tr class="even">
+<td><code>colorize</code></td>
+<td>The design is cold, gray, or lacks hierarchy</td>
+<td>Give every color a semantic or emotional job</td>
+</tr>
+<tr class="odd">
+<td><code>animate</code></td>
+<td>State changes are abrupt or feedback is missing</td>
+<td>Motion must explain, respond, or create one signature moment</td>
+</tr>
+<tr class="even">
+<td><code>delight</code></td>
+<td>The experience is correct but joyless</td>
+<td>Add context-specific pleasure without blocking the task</td>
+</tr>
+<tr class="odd">
+<td><code>adapt</code></td>
+<td>The design only works in its original context</td>
+<td>Rethink composition and input for mobile, touch, tablet, print, or email</td>
+</tr>
+<tr class="even">
+<td><code>polish</code></td>
+<td>The feature works but details are inconsistent</td>
+<td>Fix typography, alignment, states, responsive details, and small visual defects</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="critique-and-quality" class="level2">
+<h2>Critique and quality</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Skill</th>
+<th>Use it for</th>
+<th>Output</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>critique</code> or <code>design-critique</code></td>
+<td>Structured design feedback</td>
+<td>Prioritized findings across usability, hierarchy, consistency, and accessibility</td>
+</tr>
+<tr class="even">
+<td><code>audit</code></td>
+<td>Broad interface quality review</td>
+<td>Severity-ranked issues across accessibility, performance, responsiveness, and visual consistency</td>
+</tr>
+<tr class="odd">
+<td><code>accessibility:accessibility</code> or <code>design:accessibility-review</code></td>
+<td>WCAG-focused inspection</td>
+<td>Keyboard, screen reader, contrast, focus, labels, forms, motion, and target-size findings</td>
+</tr>
+<tr class="even">
+<td><code>visual-verdict</code></td>
+<td>Comparing a build to a reference image</td>
+<td>A repeatable score, concrete differences, and the next visual edits</td>
+</tr>
+<tr class="odd">
+<td><code>optimize</code> or <code>web-perf</code></td>
+<td>Loading and runtime performance</td>
+<td>Core Web Vitals, bundle, image, font, rendering, and animation improvements</td>
+</tr>
+<tr class="even">
+<td><code>harden</code></td>
+<td>Real-world resilience</td>
+<td>Long text, empty states, failures, internationalization, RTL, slow networks, and edge cases</td>
+</tr>
+<tr class="odd">
+<td><code>e2e-testing</code></td>
+<td>Critical user flows</td>
+<td>Cross-browser Playwright tests, screenshots, traces, and failure artifacts</td>
+</tr>
+<tr class="even">
+<td><code>chrome-devtools-mcp:chrome-devtools</code></td>
+<td>Browser-grounded diagnosis</td>
+<td>Screenshots, accessibility tree, console, network, runtime inspection, and performance traces</td>
+</tr>
+<tr class="odd">
+<td><code>chrome-devtools-mcp:a11y-debugging</code></td>
+<td>Reproducing accessibility failures in the browser</td>
+<td>Lighthouse, keyboard traversal, DOM order, tap targets, accessible names, and contrast inspection</td>
+</tr>
+<tr class="even">
+<td><code>chrome-devtools-mcp:debug-optimize-lcp</code></td>
+<td>Improving the real Largest Contentful Paint bottleneck</td>
+<td>Separates server, resource delay, transfer, and render delay before choosing a fix</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="advanced-visual-implementation" class="level2">
+<h2>Advanced visual implementation</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Skill</th>
+<th>Best for</th>
+<th>Use carefully because</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>gsap</code></td>
+<td>Timelines, scroll choreography, pinning, complex sequencing</td>
+<td>Animation can dominate content and add runtime cost</td>
+</tr>
+<tr class="even">
+<td><code>aceternity-ui</code></td>
+<td>React and Tailwind animation patterns and marketing-page components</td>
+<td>Combining showcase components without a concept creates a templated result</td>
+</tr>
+<tr class="odd">
+<td><code>3d-web-experience</code></td>
+<td>Three.js, React Three Fiber, Spline, and product visualization</td>
+<td>3D adds load time, battery use, accessibility concerns, and mobile risk</td>
+</tr>
+<tr class="even">
+<td><code>anthropic-skills:frontend-slides</code></td>
+<td>Interactive web-based presentations</td>
+<td>Slide conventions should not leak into product UI without reason</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="recommended-sequence" class="level2">
+<h2>Recommended sequence</h2>
+<section id="for-a-new-marketing-website" class="level3">
+<h3>For a new marketing website</h3>
+<ol type="1">
+<li><code>teach-impeccable</code></li>
+<li><code>frontend-design</code></li>
+<li><code>anthropic-skills:ui-ux-pro-max</code> for targeted research</li>
+<li>Build the token system and functional page</li>
+<li>One or two of <code>bolder</code>, <code>quieter</code>, <code>colorize</code>, <code>animate</code>, or <code>delight</code></li>
+<li><code>adapt</code></li>
+<li><code>critique</code></li>
+<li><code>design:accessibility-review</code>, <code>optimize</code>, and <code>harden</code></li>
+</ol>
+</section>
+<section id="for-an-existing-product-interface" class="level3">
+<h3>For an existing product interface</h3>
+<ol type="1">
+<li><code>critique</code></li>
+<li><code>design-system audit</code></li>
+<li><code>normalize</code></li>
+<li><code>distill</code> or <code>adapt</code></li>
+<li><code>polish</code></li>
+<li><code>design:accessibility-review</code>, <code>harden</code>, <code>optimize</code>, and E2E tests</li>
+</ol>
+</section>
+<section id="for-a-reference-faithful-rebuild" class="level3">
+<h3>For a reference-faithful rebuild</h3>
+<ol type="1">
+<li>Define the reference and content requirements</li>
+<li>Build the functional version</li>
+<li>Capture screenshots at fixed widths</li>
+<li>Run <code>visual-verdict</code></li>
+<li>Fix the largest differences first</li>
+<li>Repeat until differences are intentional or the score clears the agreed threshold</li>
+</ol>
+</section>
+</section>
+<section id="the-principle-behind-the-map" class="level2">
+<h2>The principle behind the map</h2>
+<p>Do not stack every skill on every job. Select the smallest set that addresses the actual weakness. A design that needs restraint will not improve because it received more motion, more components, and more color.</p>
+</section>
+</section>
+<section id="frontend-design-prompt-pack" class="level1">
+<h1>Frontend Design Prompt Pack</h1>
+<p>Replace bracketed text before use. These prompts are designed to work with most coding agents.</p>
+<section id="1-design-context-interview" class="level2">
+<h2>1. Design context interview</h2>
+<pre class="text"><code>Before designing, inspect the existing project for product purpose, users, brand assets, design tokens, components, and technical constraints.
+
+Then ask only the questions you cannot answer from the project:
+- Who is the primary user and what job are they trying to complete?
+- What should the interface make them feel?
+- What three words describe the brand personality?
+- Which references capture the right quality, and what exactly should be borrowed from each?
+- What should the design explicitly avoid?
+- Which accessibility, performance, browser, or brand requirements are fixed?
+
+Write the answers into a short persistent Design Context section with Users, Brand Personality, Aesthetic Direction, Constraints, Anti-References, and 3 to 5 Design Principles.</code></pre>
+</section>
+<section id="2-master-design-and-build-prompt" class="level2">
+<h2>2. Master design and build prompt</h2>
+<pre class="text"><code>Design and implement [PAGE OR FEATURE] for [PRODUCT]. The primary user is [USER], and their main goal is [GOAL]. The brand should feel [THREE ADJECTIVES].
+
+Start with a compact design plan before coding. Include:
+1. A one-sentence concept grounded in the product&#39;s subject matter.
+2. The one memorable visual or interactive idea.
+3. A palette of 4 to 6 named colors with exact values and semantic roles.
+4. One or two typefaces with clear roles, a small type scale, and loading strategy.
+5. A spacing scale, container strategy, radii, elevation, and motion tokens.
+6. A short ASCII wireframe for desktop and mobile.
+7. The empty, loading, error, success, and disabled states that matter.
+
+Review the plan against the brief. Replace any choice that could belong unchanged to a generic SaaS template.
+
+Then implement a functional, responsive, accessible version. Use semantic HTML, visible keyboard focus, reduced-motion support, appropriate touch targets, responsive images, and content-specific copy. Use shared tokens and components instead of one-off values.
+
+Avoid default AI styling unless the brief explicitly calls for it. This includes purple-to-blue gradients, cyan glows on dark backgrounds, gradient headline text, glass cards, repeated rounded feature cards, decorative sparklines, generic all-caps eyebrow labels, arbitrary monospace labels, and identical fade-up animations on every section.
+
+Finish by taking screenshots at 375px, 768px, and 1440px. Critique hierarchy, typography, spacing, content, responsiveness, and specificity to the brief. Fix the three highest-impact issues before presenting the result.</code></pre>
+</section>
+<section id="3-art-direction-prompt" class="level2">
+<h2>3. Art-direction prompt</h2>
+<pre class="text"><code>Propose three genuinely different visual directions for [PRODUCT]. Ground each direction in the product&#39;s real materials, culture, workflow, or environment.
+
+For each direction provide:
+- Concept and emotional tone
+- Signature element
+- Color approach
+- Typography approach
+- Composition and grid behavior
+- Image or illustration treatment
+- Motion approach
+- What makes it specific to this product
+- The main risk
+
+Do not produce three variations of the same SaaS landing page. Do not use trends as concepts. Recommend one direction and explain why it best serves the user&#39;s main goal.</code></pre>
+</section>
+<section id="4-anti-generic-review" class="level2">
+<h2>4. Anti-generic review</h2>
+<pre class="text"><code>Review this interface for signs of generic AI-generated design. Do not judge whether it is fashionable. Judge whether its choices are specific, coherent, and useful.
+
+Check:
+- Could the product name be replaced without changing the design?
+- Does the hero use the subject&#39;s most characteristic content or a template?
+- Are typography and layout carrying personality, or are effects doing the work?
+- Are cards, labels, icons, gradients, shadows, and motion used because the content requires them?
+- Does every section have the same alignment, weight, radius, and animation?
+- Is the copy concrete, or is it generic marketing filler?
+- Is there one memorable element and enough restraint around it?
+
+Return the five strongest tells, why each weakens the result, and the smallest high-impact correction for each. Then propose one revised concept sentence.</code></pre>
+</section>
+<section id="5-distill-pass" class="level2">
+<h2>5. Distill pass</h2>
+<pre class="text"><code>Simplify [PAGE OR FEATURE] around one primary user goal: [GOAL].
+
+Identify competing actions, repeated copy, unnecessary containers, nested cards, redundant labels, arbitrary variants, and information that can be progressively disclosed. Preserve every capability users need.
+
+Propose the removals first. Then implement the smallest coherent simplification. Verify that the reading order, primary action, keyboard access, and necessary secondary features remain clear.</code></pre>
+</section>
+<section id="6-bolder-pass" class="level2">
+<h2>6. Bolder pass</h2>
+<pre class="text"><code>This design is too safe. Make it more memorable without adding generic visual effects.
+
+Choose one focal point and increase contrast through no more than two of these dimensions: scale, typography, composition, color, image treatment, or interaction. Keep everything else disciplined. Do not use neon-on-dark, purple-blue gradients, glass cards, gradient text, or random floating shapes.
+
+Explain the visual risk, implement it, then confirm that readability, responsiveness, performance, and the primary task still work.</code></pre>
+</section>
+<section id="7-quieter-pass" class="level2">
+<h2>7. Quieter pass</h2>
+<pre class="text"><code>This interface is visually tiring. Refine it without making it generic.
+
+Preserve the core idea and strongest point of hierarchy. Reduce competing color, decoration, heavy type, excessive contrast, unnecessary layering, and decorative motion. Use spacing, alignment, and a smaller number of precise accents to signal quality.
+
+List what you are removing or reducing and why, then implement the pass.</code></pre>
+</section>
+<section id="8-motion-pass" class="level2">
+<h2>8. Motion pass</h2>
+<pre class="text"><code>Add purposeful motion to [PAGE OR FEATURE]. First identify state changes that lack feedback, spatial relationships that are unclear, and one possible signature moment.
+
+Define motion tokens for direct feedback, small state changes, layout transitions, and entrances. Prefer transforms and opacity. Keep exits shorter than entrances. Avoid bounce and elastic easing. Cap stagger duration.
+
+Implement only motion that explains change, acknowledges input, or creates the one signature moment. Add a reduced-motion alternative and verify keyboard and touch behavior.</code></pre>
+</section>
+<section id="9-screenshot-critique" class="level2">
+<h2>9. Screenshot critique</h2>
+<pre class="text"><code>Critique this screenshot in two passes.
+
+Pass 1, design:
+- What attracts attention first, and is that correct?
+- Is the page&#39;s purpose clear in two seconds?
+- Is the reading order clear?
+- Are type, space, color, imagery, and copy coherent?
+- Which choices feel specific to the product?
+- Which choices feel accidental or templated?
+
+Pass 2, production:
+- Check mobile adaptation, overflow, focus, contrast, touch targets, reduced motion, loading states, and performance risks.
+
+Rank findings by impact. Recommend at most five changes. Make each recommendation concrete enough to implement.</code></pre>
+</section>
+<section id="10-production-hardening-prompt" class="level2">
+<h2>10. Production hardening prompt</h2>
+<pre class="text"><code>Harden this interface for real users. Test or reason through:
+- No data, one item, many items, and partial data
+- Long text, short text, emoji, CJK, and RTL
+- 200 percent zoom and keyboard-only navigation
+- Slow, offline, timed-out, unauthorized, forbidden, not-found, rate-limited, and server-error states
+- Repeated clicks, stale responses, and interrupted navigation
+- 320px mobile, tablet, desktop, wide desktop, touch, and pointer input
+- Reduced motion and high contrast
+
+Fix issues with minimal code and shared patterns. Do not hide critical functionality on small screens. Report the cases tested and any remaining risks.</code></pre>
+</section>
+<section id="11-pre-delivery-verification-prompt" class="level2">
+<h2>11. Pre-delivery verification prompt</h2>
+<pre class="text"><code>Do a final frontend verification pass. Do not claim completion from code inspection alone.
+
+Run the project&#39;s lint, type checks, unit tests, and relevant E2E tests. Inspect screenshots at representative mobile and desktop widths. Check keyboard navigation, visible focus, text and UI contrast, responsive overflow, image dimensions, loading and error states, reduced motion, and Core Web Vitals risks.
+
+Return:
+1. Checks run and evidence
+2. Issues found and fixed
+3. Known limitations
+4. A clear ship or revise recommendation</code></pre>
+</section>
+</section>
+<section id="frontend-design-checklists" class="level1">
+<h1>Frontend Design Checklists</h1>
+<section id="five-minute-anti-vibe-check" class="level2">
+<h2>Five-minute anti-vibe check</h2>
+<ul class="task-list">
+<li><input type="checkbox" disabled></input>
+The product, user, and primary job are explicit.</li>
+<li><input type="checkbox" disabled></input>
+The visual concept can be explained in one sentence.</li>
+<li><input type="checkbox" disabled></input>
+The hero uses content or behavior specific to the subject.</li>
+<li><input type="checkbox" disabled></input>
+There is one memorable element, not ten effects.</li>
+<li><input type="checkbox" disabled></input>
+Changing the logo would not make the page fit any random startup.</li>
+<li><input type="checkbox" disabled></input>
+Typography, composition, and copy do more work than decoration.</li>
+<li><input type="checkbox" disabled></input>
+Cards exist because the content is independent or interactive.</li>
+<li><input type="checkbox" disabled></input>
+Color has named roles.</li>
+<li><input type="checkbox" disabled></input>
+Motion explains state or rewards an action.</li>
+<li><input type="checkbox" disabled></input>
+Generic filler copy and fake metrics are gone.</li>
+</ul>
+</section>
+<section id="visual-system" class="level2">
+<h2>Visual system</h2>
+<ul class="task-list">
+<li><input type="checkbox" disabled></input>
+Primitive and semantic color tokens exist.</li>
+<li><input type="checkbox" disabled></input>
+Tinted neutrals fit the brand temperature.</li>
+<li><input type="checkbox" disabled></input>
+Accent color is rare enough to preserve hierarchy.</li>
+<li><input type="checkbox" disabled></input>
+One or two type families have clear roles.</li>
+<li><input type="checkbox" disabled></input>
+The type scale uses few sizes with meaningful contrast.</li>
+<li><input type="checkbox" disabled></input>
+Body copy has a readable measure and line-height.</li>
+<li><input type="checkbox" disabled></input>
+A 4-point spacing scale is used consistently.</li>
+<li><input type="checkbox" disabled></input>
+Radius and elevation vary by purpose, not habit.</li>
+<li><input type="checkbox" disabled></input>
+Desktop and mobile compositions are both intentional.</li>
+<li><input type="checkbox" disabled></input>
+The squint test reveals a clear first and second priority.</li>
+</ul>
+</section>
+<section id="components-and-interaction" class="level2">
+<h2>Components and interaction</h2>
+<ul class="task-list">
+<li><input type="checkbox" disabled></input>
+Default, hover, focus, active, disabled, loading, error, and success states exist where relevant.</li>
+<li><input type="checkbox" disabled></input>
+Native elements are used before custom controls.</li>
+<li><input type="checkbox" disabled></input>
+All interactive elements are keyboard reachable.</li>
+<li><input type="checkbox" disabled></input>
+Focus indicators are visible and not obscured.</li>
+<li><input type="checkbox" disabled></input>
+Touch targets are at least 44 by 44 CSS pixels when practical.</li>
+<li><input type="checkbox" disabled></input>
+Forms have visible labels and specific errors.</li>
+<li><input type="checkbox" disabled></input>
+Empty states explain value and offer a next action.</li>
+<li><input type="checkbox" disabled></input>
+Destructive actions use undo when recovery is possible.</li>
+<li><input type="checkbox" disabled></input>
+Important behavior never depends on hover alone.</li>
+<li><input type="checkbox" disabled></input>
+The same action uses the same name throughout the flow.</li>
+</ul>
+</section>
+<section id="motion" class="level2">
+<h2>Motion</h2>
+<ul class="task-list">
+<li><input type="checkbox" disabled></input>
+Motion has a functional or narrative purpose.</li>
+<li><input type="checkbox" disabled></input>
+There is no repeated animation simply because a component exists.</li>
+<li><input type="checkbox" disabled></input>
+Direct feedback feels immediate.</li>
+<li><input type="checkbox" disabled></input>
+Exits are shorter than entrances.</li>
+<li><input type="checkbox" disabled></input>
+Stagger sequences do not make users wait.</li>
+<li><input type="checkbox" disabled></input>
+Transform and opacity are preferred over layout properties.</li>
+<li><input type="checkbox" disabled></input>
+Reduced-motion behavior is implemented and checked.</li>
+<li><input type="checkbox" disabled></input>
+Animation stays smooth on a lower-powered device.</li>
+</ul>
+</section>
+<section id="responsive-and-content-resilience" class="level2">
+<h2>Responsive and content resilience</h2>
+<ul class="task-list">
+<li><input type="checkbox" disabled></input>
+Layout works at 320px, 375px, 768px, 1024px, and 1440px.</li>
+<li><input type="checkbox" disabled></input>
+There is no horizontal scroll.</li>
+<li><input type="checkbox" disabled></input>
+Critical features remain available on mobile.</li>
+<li><input type="checkbox" disabled></input>
+Touch and pointer inputs are both supported.</li>
+<li><input type="checkbox" disabled></input>
+Content works at 200 percent zoom.</li>
+<li><input type="checkbox" disabled></input>
+Long strings wrap, truncate, or expand intentionally.</li>
+<li><input type="checkbox" disabled></input>
+German-length expansion, CJK, emoji, and RTL have been considered.</li>
+<li><input type="checkbox" disabled></input>
+Images use appropriate dimensions, formats, and responsive sources.</li>
+<li><input type="checkbox" disabled></input>
+Safe areas and mobile browser chrome do not cover controls.</li>
+</ul>
+</section>
+<section id="accessibility" class="level2">
+<h2>Accessibility</h2>
+<ul class="task-list">
+<li><input type="checkbox" disabled></input>
+The page has a meaningful title and language.</li>
+<li><input type="checkbox" disabled></input>
+Landmarks and headings form a logical structure.</li>
+<li><input type="checkbox" disabled></input>
+Images have useful alt text or empty alt text when decorative.</li>
+<li><input type="checkbox" disabled></input>
+Normal text meets 4.5:1 contrast.</li>
+<li><input type="checkbox" disabled></input>
+Large text and essential UI graphics meet 3:1 contrast.</li>
+<li><input type="checkbox" disabled></input>
+Color is never the only indicator.</li>
+<li><input type="checkbox" disabled></input>
+Dynamic status messages are announced when needed.</li>
+<li><input type="checkbox" disabled></input>
+Dialogs manage focus and restore it on close.</li>
+<li><input type="checkbox" disabled></input>
+Keyboard testing and at least one screen-reader pass are complete.</li>
+<li><input type="checkbox" disabled></input>
+Automated accessibility checks are supplemented by manual checks.</li>
+</ul>
+</section>
+<section id="performance" class="level2">
+<h2>Performance</h2>
+<ul class="task-list">
+<li><input type="checkbox" disabled></input>
+Largest Contentful Paint content is identified and prioritized.</li>
+<li><input type="checkbox" disabled></input>
+Image and video dimensions reserve layout space.</li>
+<li><input type="checkbox" disabled></input>
+Above-the-fold media is not accidentally lazy-loaded.</li>
+<li><input type="checkbox" disabled></input>
+Below-the-fold heavy media is lazy-loaded.</li>
+<li><input type="checkbox" disabled></input>
+Fonts are subset, limited, and loaded without blocking text.</li>
+<li><input type="checkbox" disabled></input>
+Large routes and components are split where useful.</li>
+<li><input type="checkbox" disabled></input>
+Unused libraries and third-party scripts are removed.</li>
+<li><input type="checkbox" disabled></input>
+Runtime animation avoids layout thrashing.</li>
+<li><input type="checkbox" disabled></input>
+LCP, INP, and CLS are measured on a realistic profile.</li>
+<li><input type="checkbox" disabled></input>
+LCP is at or below 2.5 seconds at the 75th percentile, or its remaining gap is documented.</li>
+<li><input type="checkbox" disabled></input>
+Performance is compared before and after optimization.</li>
+</ul>
+</section>
+<section id="production-resilience" class="level2">
+<h2>Production resilience</h2>
+<ul class="task-list">
+<li><input type="checkbox" disabled></input>
+Loading, empty, partial, success, error, offline, and permission states work.</li>
+<li><input type="checkbox" disabled></input>
+User input survives recoverable failures.</li>
+<li><input type="checkbox" disabled></input>
+Duplicate submissions and race conditions are handled.</li>
+<li><input type="checkbox" disabled></input>
+Dates, numbers, currency, and pluralization use locale-aware APIs.</li>
+<li><input type="checkbox" disabled></input>
+Client-side validation is backed by server-side validation.</li>
+<li><input type="checkbox" disabled></input>
+Critical flows have E2E coverage.</li>
+<li><input type="checkbox" disabled></input>
+E2E failures retain screenshots, traces, or video.</li>
+<li><input type="checkbox" disabled></input>
+Chromium, Firefox, WebKit, and a mobile profile are covered as appropriate.</li>
+</ul>
+</section>
+<section id="final-critique" class="level2">
+<h2>Final critique</h2>
+<ul class="task-list">
+<li><input type="checkbox" disabled></input>
+Screenshot review was performed at mobile and desktop widths.</li>
+<li><input type="checkbox" disabled></input>
+The three highest-impact visual issues were fixed.</li>
+<li><input type="checkbox" disabled></input>
+Repeated elements share a system without feeling mechanically cloned.</li>
+<li><input type="checkbox" disabled></input>
+Decorative elements that do not support the concept were removed.</li>
+<li><input type="checkbox" disabled></input>
+Copy is concrete, concise, and consistent.</li>
+<li><input type="checkbox" disabled></input>
+The interface remains specific to the product after polish.</li>
+<li><input type="checkbox" disabled></input>
+Known limitations are documented.</li>
+<li><input type="checkbox" disabled></input>
+The final recommendation is explicitly ship or revise.</li>
+</ul>
+</section>
+</section>
+<section id="public-frontend-design-references" class="level1">
+<h1>Public Frontend Design References</h1>
+<p>Links were checked on 5 September 2026. Prefer official documentation for current APIs and installation details.</p>
+<section id="foundations" class="level2">
+<h2>Foundations</h2>
+<ul>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS">MDN CSS reference</a></li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/oklch">MDN OKLCH reference</a></li>
+<li><a href="https://www.w3.org/TR/wcag/">W3C Web Content Accessibility Guidelines 2.2</a></li>
+<li><a href="https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/">W3C explanation of WCAG 2.2 changes</a></li>
+<li><a href="https://www.w3.org/WAI/ARIA/apg/">ARIA Authoring Practices Guide</a></li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/Accessibility">MDN Accessibility</a></li>
+<li><a href="https://webaim.org/resources/contrastchecker/">WebAIM contrast checker</a></li>
+<li><a href="https://polypane.app/">Polypane responsive and accessibility browser</a></li>
+<li><a href="https://wakamaifondue.com/">Wakamai Fondue font inspection</a></li>
+<li><a href="https://github.com/unjs/fontaine">Fontaine font metric fallback generation</a></li>
+</ul>
+</section>
+<section id="components-and-icons" class="level2">
+<h2>Components and icons</h2>
+<ul>
+<li><a href="https://ui.shadcn.com/docs/components">shadcn/ui components</a></li>
+<li><a href="https://ui.aceternity.com/">Aceternity UI</a></li>
+<li><a href="https://lucide.dev/guide">Lucide icon guide</a></li>
+<li><a href="https://heroicons.com/">Heroicons</a></li>
+<li><a href="https://simpleicons.org/">Simple Icons</a></li>
+<li><a href="https://www.radix-ui.com/primitives">Radix UI primitives</a></li>
+<li><a href="https://tailwindcss.com/docs/responsive-design">Tailwind responsive design</a></li>
+</ul>
+<p>Use these as accessible behavior and implementation references. Restyle and compose them according to the product&#39;s design direction.</p>
+</section>
+<section id="motion-1" class="level2">
+<h2>Motion</h2>
+<ul>
+<li><a href="https://motion.dev/docs">Motion documentation</a></li>
+<li><a href="https://motion.dev/docs/react">Motion for React</a></li>
+<li><a href="https://gsap.com/docs/v3/">GSAP documentation</a></li>
+<li><a href="https://gsap.com/docs/v3/Plugins/ScrollTrigger/">GSAP ScrollTrigger</a></li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion">MDN prefers-reduced-motion</a></li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Animations_API">MDN Web Animations API</a></li>
+</ul>
+<p>Use CSS for simple state transitions, Motion for React-native state and layout animation, and GSAP for complex timelines or scroll choreography.</p>
+</section>
+<section id="3d-and-immersive-web" class="level2">
+<h2>3D and immersive web</h2>
+<ul>
+<li><a href="https://threejs.org/">Three.js</a></li>
+<li><a href="https://threejs.org/manual/">Three.js manual</a></li>
+<li><a href="https://r3f.docs.pmnd.rs/">React Three Fiber</a></li>
+<li><a href="https://drei.docs.pmnd.rs/">Drei helpers</a></li>
+<li><a href="https://docs.spline.design/">Spline documentation</a></li>
+<li><a href="https://doc.babylonjs.com/">Babylon.js documentation</a></li>
+<li><a href="https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html">glTF 2.0 specification</a></li>
+<li><a href="https://gltf-transform.dev/">glTF Transform</a></li>
+</ul>
+</section>
+<section id="testing-and-quality" class="level2">
+<h2>Testing and quality</h2>
+<ul>
+<li><a href="https://playwright.dev/">Playwright</a></li>
+<li><a href="https://github.com/dequelabs/axe-core/blob/develop/doc/developer-guide.md">axe-core developer guide</a></li>
+<li><a href="https://developer.chrome.com/docs/lighthouse/overview">Lighthouse documentation</a></li>
+<li><a href="https://developer.chrome.com/docs/devtools/">Chrome DevTools</a></li>
+<li><a href="https://developer.chrome.com/docs/devtools/performance/">Chrome DevTools Performance</a></li>
+<li><a href="https://web.dev/articles/vitals">Core Web Vitals</a></li>
+<li><a href="https://www.webpagetest.org/">WebPageTest</a></li>
+<li><a href="https://wave.webaim.org/">WAVE accessibility evaluation</a></li>
+<li><a href="https://www.nvaccess.org/download/">NVDA screen reader</a></li>
+<li><a href="https://support.apple.com/guide/voiceover/welcome/mac">VoiceOver user guide</a></li>
+</ul>
+</section>
+<section id="inspiration-without-copying" class="level2">
+<h2>Inspiration without copying</h2>
+<p>Use inspiration sites to study patterns, not to select a ready-made aesthetic. Record what you are learning from each reference.</p>
+<ul>
+<li><a href="https://www.awwwards.com/">Awwwards</a></li>
+<li><a href="https://godly.website/">Godly</a></li>
+<li><a href="https://www.siteinspire.com/">SiteInspire</a></li>
+<li><a href="https://land-book.com/">Land-book</a></li>
+<li><a href="https://mobbin.com/">Mobbin</a></li>
+</ul>
+<p>For every reference, write down:</p>
+<ol type="1">
+<li>The exact quality you want to learn from.</li>
+<li>The part that fits your product.</li>
+<li>The part you should not copy.</li>
+<li>How the idea will change when applied to your own content.</li>
+</ol>
+</section>
+<section id="suggested-reading" class="level2">
+<h2>Suggested reading</h2>
+<ul>
+<li>Robert Bringhurst, <em>The Elements of Typographic Style</em></li>
+<li>Josef Müller-Brockmann, <em>Grid Systems in Graphic Design</em></li>
+<li>Ellen Lupton, <em>Thinking with Type</em></li>
+<li>Don Norman, <em>The Design of Everyday Things</em></li>
+<li>Steve Krug, <em>Don&#39;t Make Me Think</em></li>
+<li>Alla Kholmatova, <em>Design Systems</em></li>
+<li>Refactoring UI by Adam Wathan and Steve Schoger</li>
+</ul>
+<p>Books and galleries sharpen judgment, but the final design still needs to be grounded in the product&#39;s own subject matter.</p>
+</section>
+</section>
+</main>
+</body>
+</html>

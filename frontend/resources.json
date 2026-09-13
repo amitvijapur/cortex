@@ -1,0 +1,843 @@
+[
+  {
+    "id": "mdn-css-reference",
+    "title": "MDN CSS reference",
+    "kind": "resource",
+    "category": "Foundations",
+    "url": "https://developer.mozilla.org/en-US/docs/Web/CSS",
+    "purpose": "Look up CSS properties and syntax.",
+    "tags": [
+      "foundations"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "mdn-oklch-reference",
+    "title": "MDN OKLCH reference",
+    "kind": "resource",
+    "category": "Foundations",
+    "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/oklch",
+    "purpose": "Reference OKLCH color values.",
+    "tags": [
+      "foundations"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "w3c-web-content-accessibility-guidelines-2-2",
+    "title": "W3C Web Content Accessibility Guidelines 2.2",
+    "kind": "resource",
+    "category": "Foundations",
+    "url": "https://www.w3.org/TR/wcag/",
+    "purpose": "Reference web accessibility requirements.",
+    "tags": [
+      "foundations"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "w3c-explanation-of-wcag-2-2-changes",
+    "title": "W3C explanation of WCAG 2.2 changes",
+    "kind": "resource",
+    "category": "Foundations",
+    "url": "https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/",
+    "purpose": "Understand the changes introduced in WCAG 2.2.",
+    "tags": [
+      "foundations"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "aria-authoring-practices-guide",
+    "title": "ARIA Authoring Practices Guide",
+    "kind": "resource",
+    "category": "Foundations",
+    "url": "https://www.w3.org/WAI/ARIA/apg/",
+    "purpose": "Reference accessible ARIA interaction patterns.",
+    "tags": [
+      "foundations"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "mdn-accessibility",
+    "title": "MDN Accessibility",
+    "kind": "resource",
+    "category": "Foundations",
+    "url": "https://developer.mozilla.org/en-US/docs/Web/Accessibility",
+    "purpose": "Consult accessibility guidance for the web.",
+    "tags": [
+      "foundations"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "webaim-contrast-checker",
+    "title": "WebAIM contrast checker",
+    "kind": "resource",
+    "category": "Foundations",
+    "url": "https://webaim.org/resources/contrastchecker/",
+    "purpose": "Check text and background contrast.",
+    "tags": [
+      "foundations"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "polypane-responsive-and-accessibility-browser",
+    "title": "Polypane responsive and accessibility browser",
+    "kind": "resource",
+    "category": "Foundations",
+    "url": "https://polypane.app/",
+    "purpose": "Inspect responsive layouts and accessibility.",
+    "tags": [
+      "foundations"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "wakamai-fondue-font-inspection",
+    "title": "Wakamai Fondue font inspection",
+    "kind": "resource",
+    "category": "Foundations",
+    "url": "https://wakamaifondue.com/",
+    "purpose": "Inspect font capabilities.",
+    "tags": [
+      "foundations"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "fontaine-font-metric-fallback-generation",
+    "title": "Fontaine font metric fallback generation",
+    "kind": "resource",
+    "category": "Foundations",
+    "url": "https://github.com/unjs/fontaine",
+    "purpose": "Generate font metric fallbacks.",
+    "tags": [
+      "foundations"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "shadcn-ui-components",
+    "title": "shadcn/ui components",
+    "kind": "resource",
+    "category": "Components and icons",
+    "url": "https://ui.shadcn.com/docs/components",
+    "purpose": "Reference component behavior and implementation.",
+    "tags": [
+      "components-and-icons"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "aceternity-ui",
+    "title": "Aceternity UI",
+    "kind": "resource",
+    "category": "Components and icons",
+    "url": "https://ui.aceternity.com/",
+    "purpose": "Study animated component patterns for a product-specific design.",
+    "tags": [
+      "components-and-icons"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "lucide-icon-guide",
+    "title": "Lucide icon guide",
+    "kind": "resource",
+    "category": "Components and icons",
+    "url": "https://lucide.dev/guide",
+    "purpose": "Reference icon usage.",
+    "tags": [
+      "components-and-icons"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "heroicons",
+    "title": "Heroicons",
+    "kind": "resource",
+    "category": "Components and icons",
+    "url": "https://heroicons.com/",
+    "purpose": "Source interface icons.",
+    "tags": [
+      "components-and-icons"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "simple-icons",
+    "title": "Simple Icons",
+    "kind": "resource",
+    "category": "Components and icons",
+    "url": "https://simpleicons.org/",
+    "purpose": "Reference brand icons.",
+    "tags": [
+      "components-and-icons"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "radix-ui-primitives",
+    "title": "Radix UI primitives",
+    "kind": "resource",
+    "category": "Components and icons",
+    "url": "https://www.radix-ui.com/primitives",
+    "purpose": "Reference accessible UI primitives.",
+    "tags": [
+      "components-and-icons"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "tailwind-responsive-design",
+    "title": "Tailwind responsive design",
+    "kind": "resource",
+    "category": "Components and icons",
+    "url": "https://tailwindcss.com/docs/responsive-design",
+    "purpose": "Implement responsive layouts with Tailwind.",
+    "tags": [
+      "components-and-icons"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "motion-documentation",
+    "title": "Motion documentation",
+    "kind": "resource",
+    "category": "Motion",
+    "url": "https://motion.dev/docs",
+    "purpose": "Reference motion implementation.",
+    "tags": [
+      "motion"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "motion-for-react",
+    "title": "Motion for React",
+    "kind": "resource",
+    "category": "Motion",
+    "url": "https://motion.dev/docs/react",
+    "purpose": "Animate React state and layout changes.",
+    "tags": [
+      "motion"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "gsap-documentation",
+    "title": "GSAP documentation",
+    "kind": "resource",
+    "category": "Motion",
+    "url": "https://gsap.com/docs/v3/",
+    "purpose": "Build complex animation timelines.",
+    "tags": [
+      "motion"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "gsap-scrolltrigger",
+    "title": "GSAP ScrollTrigger",
+    "kind": "resource",
+    "category": "Motion",
+    "url": "https://gsap.com/docs/v3/Plugins/ScrollTrigger/",
+    "purpose": "Choreograph scroll-driven animation.",
+    "tags": [
+      "motion"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "mdn-prefers-reduced-motion",
+    "title": "MDN prefers-reduced-motion",
+    "kind": "resource",
+    "category": "Motion",
+    "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion",
+    "purpose": "Respect reduced-motion preferences.",
+    "tags": [
+      "motion"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "mdn-web-animations-api",
+    "title": "MDN Web Animations API",
+    "kind": "resource",
+    "category": "Motion",
+    "url": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Animations_API",
+    "purpose": "Reference browser animation APIs.",
+    "tags": [
+      "motion"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "three-js",
+    "title": "Three.js",
+    "kind": "resource",
+    "category": "3D and immersive web",
+    "url": "https://threejs.org/",
+    "purpose": "Explore 3D web implementation.",
+    "tags": [
+      "3d-and-immersive-web"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "three-js-manual",
+    "title": "Three.js manual",
+    "kind": "resource",
+    "category": "3D and immersive web",
+    "url": "https://threejs.org/manual/",
+    "purpose": "Learn Three.js implementation.",
+    "tags": [
+      "3d-and-immersive-web"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "react-three-fiber",
+    "title": "React Three Fiber",
+    "kind": "resource",
+    "category": "3D and immersive web",
+    "url": "https://r3f.docs.pmnd.rs/",
+    "purpose": "Build 3D experiences with React Three Fiber.",
+    "tags": [
+      "3d-and-immersive-web"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "drei-helpers",
+    "title": "Drei helpers",
+    "kind": "resource",
+    "category": "3D and immersive web",
+    "url": "https://drei.docs.pmnd.rs/",
+    "purpose": "Reference helpers for React Three Fiber.",
+    "tags": [
+      "3d-and-immersive-web"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "spline-documentation",
+    "title": "Spline documentation",
+    "kind": "resource",
+    "category": "3D and immersive web",
+    "url": "https://docs.spline.design/",
+    "purpose": "Consult Spline implementation documentation.",
+    "tags": [
+      "3d-and-immersive-web"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "babylon-js-documentation",
+    "title": "Babylon.js documentation",
+    "kind": "resource",
+    "category": "3D and immersive web",
+    "url": "https://doc.babylonjs.com/",
+    "purpose": "Consult Babylon.js implementation documentation.",
+    "tags": [
+      "3d-and-immersive-web"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "gltf-2-0-specification",
+    "title": "glTF 2.0 specification",
+    "kind": "resource",
+    "category": "3D and immersive web",
+    "url": "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html",
+    "purpose": "Reference the glTF 2.0 format.",
+    "tags": [
+      "3d-and-immersive-web"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "gltf-transform",
+    "title": "glTF Transform",
+    "kind": "resource",
+    "category": "3D and immersive web",
+    "url": "https://gltf-transform.dev/",
+    "purpose": "Work with glTF assets.",
+    "tags": [
+      "3d-and-immersive-web"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "playwright",
+    "title": "Playwright",
+    "kind": "resource",
+    "category": "Testing and quality",
+    "url": "https://playwright.dev/",
+    "purpose": "Test critical user flows in the browser.",
+    "tags": [
+      "testing-and-quality"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "axe-core-developer-guide",
+    "title": "axe-core developer guide",
+    "kind": "resource",
+    "category": "Testing and quality",
+    "url": "https://github.com/dequelabs/axe-core/blob/develop/doc/developer-guide.md",
+    "purpose": "Reference automated accessibility testing.",
+    "tags": [
+      "testing-and-quality"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "lighthouse-documentation",
+    "title": "Lighthouse documentation",
+    "kind": "resource",
+    "category": "Testing and quality",
+    "url": "https://developer.chrome.com/docs/lighthouse/overview",
+    "purpose": "Audit frontend quality with Lighthouse.",
+    "tags": [
+      "testing-and-quality"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "chrome-devtools",
+    "title": "Chrome DevTools",
+    "kind": "resource",
+    "category": "Testing and quality",
+    "url": "https://developer.chrome.com/docs/devtools/",
+    "purpose": "Inspect and diagnose browser behavior.",
+    "tags": [
+      "testing-and-quality"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "chrome-devtools-performance",
+    "title": "Chrome DevTools Performance",
+    "kind": "resource",
+    "category": "Testing and quality",
+    "url": "https://developer.chrome.com/docs/devtools/performance/",
+    "purpose": "Inspect frontend performance.",
+    "tags": [
+      "testing-and-quality"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "core-web-vitals",
+    "title": "Core Web Vitals",
+    "kind": "resource",
+    "category": "Testing and quality",
+    "url": "https://web.dev/articles/vitals",
+    "purpose": "Reference core web performance metrics.",
+    "tags": [
+      "testing-and-quality"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "webpagetest",
+    "title": "WebPageTest",
+    "kind": "resource",
+    "category": "Testing and quality",
+    "url": "https://www.webpagetest.org/",
+    "purpose": "Evaluate web page performance.",
+    "tags": [
+      "testing-and-quality"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "wave-accessibility-evaluation",
+    "title": "WAVE accessibility evaluation",
+    "kind": "resource",
+    "category": "Testing and quality",
+    "url": "https://wave.webaim.org/",
+    "purpose": "Evaluate web accessibility.",
+    "tags": [
+      "testing-and-quality"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "nvda-screen-reader",
+    "title": "NVDA screen reader",
+    "kind": "resource",
+    "category": "Testing and quality",
+    "url": "https://www.nvaccess.org/download/",
+    "purpose": "Test screen reader behavior with NVDA.",
+    "tags": [
+      "testing-and-quality"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "voiceover-user-guide",
+    "title": "VoiceOver user guide",
+    "kind": "resource",
+    "category": "Testing and quality",
+    "url": "https://support.apple.com/guide/voiceover/welcome/mac",
+    "purpose": "Reference VoiceOver screen reader usage.",
+    "tags": [
+      "testing-and-quality"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "awwwards",
+    "title": "Awwwards",
+    "kind": "resource",
+    "category": "Inspiration without copying",
+    "url": "https://www.awwwards.com/",
+    "purpose": "Study design patterns and adapt them to the product.",
+    "tags": [
+      "inspiration-without-copying"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "godly",
+    "title": "Godly",
+    "kind": "resource",
+    "category": "Inspiration without copying",
+    "url": "https://godly.website/",
+    "purpose": "Study visual patterns and record what fits the product.",
+    "tags": [
+      "inspiration-without-copying"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "siteinspire",
+    "title": "SiteInspire",
+    "kind": "resource",
+    "category": "Inspiration without copying",
+    "url": "https://www.siteinspire.com/",
+    "purpose": "Study site design patterns without copying an aesthetic.",
+    "tags": [
+      "inspiration-without-copying"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "land-book",
+    "title": "Land-book",
+    "kind": "resource",
+    "category": "Inspiration without copying",
+    "url": "https://land-book.com/",
+    "purpose": "Study layout inspiration and adapt it to original content.",
+    "tags": [
+      "inspiration-without-copying"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "mobbin",
+    "title": "Mobbin",
+    "kind": "resource",
+    "category": "Inspiration without copying",
+    "url": "https://mobbin.com/",
+    "purpose": "Study interface patterns and identify what fits the product.",
+    "tags": [
+      "inspiration-without-copying"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "Imported from the September 5, 2026 source snapshot; link not independently verified.",
+    "used_in": []
+  },
+  {
+    "id": "the-elements-of-typographic-style",
+    "title": "The Elements of Typographic Style",
+    "kind": "book",
+    "category": "Suggested reading",
+    "purpose": "Study typographic style.",
+    "tags": [
+      "reading"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "By Robert Bringhurst. Source entry: Robert Bringhurst, The Elements of Typographic Style",
+    "used_in": []
+  },
+  {
+    "id": "grid-systems-in-graphic-design",
+    "title": "Grid Systems in Graphic Design",
+    "kind": "book",
+    "category": "Suggested reading",
+    "purpose": "Study graphic design grid systems.",
+    "tags": [
+      "reading"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "By Josef Müller-Brockmann. Source entry: Josef Müller-Brockmann, Grid Systems in Graphic Design",
+    "used_in": []
+  },
+  {
+    "id": "thinking-with-type",
+    "title": "Thinking with Type",
+    "kind": "book",
+    "category": "Suggested reading",
+    "purpose": "Study typography.",
+    "tags": [
+      "reading"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "By Ellen Lupton. Source entry: Ellen Lupton, Thinking with Type",
+    "used_in": []
+  },
+  {
+    "id": "the-design-of-everyday-things",
+    "title": "The Design of Everyday Things",
+    "kind": "book",
+    "category": "Suggested reading",
+    "purpose": "Study the design of everyday interactions.",
+    "tags": [
+      "reading"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "By Don Norman. Source entry: Don Norman, The Design of Everyday Things",
+    "used_in": []
+  },
+  {
+    "id": "don-t-make-me-think",
+    "title": "Don't Make Me Think",
+    "kind": "book",
+    "category": "Suggested reading",
+    "purpose": "Study interface usability.",
+    "tags": [
+      "reading"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "By Steve Krug. Source entry: Steve Krug, Don't Make Me Think",
+    "used_in": []
+  },
+  {
+    "id": "design-systems",
+    "title": "Design Systems",
+    "kind": "book",
+    "category": "Suggested reading",
+    "purpose": "Study design systems.",
+    "tags": [
+      "reading"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "By Alla Kholmatova. Source entry: Alla Kholmatova, Design Systems",
+    "used_in": []
+  },
+  {
+    "id": "refactoring-ui",
+    "title": "Refactoring UI",
+    "kind": "book",
+    "category": "Suggested reading",
+    "purpose": "Study practical UI design.",
+    "tags": [
+      "reading"
+    ],
+    "status": "reference",
+    "added": "2026-09-13",
+    "last_checked": null,
+    "notes": "By Adam Wathan and Steve Schoger. Source entry: Refactoring UI by Adam Wathan and Steve Schoger",
+    "used_in": []
+  }
+]
