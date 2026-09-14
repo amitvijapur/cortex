@@ -11,10 +11,15 @@ Run these steps in order.
 
 ## 1. Discover — deterministic scan
 
-Run the scanner:
+Resolve paths once and use these same values throughout setup. State precedence is
+`CORTEX_HOME`, then `CLAUDE_DIR`, then `$HOME/.claude`, matching the CLI and installer.
+The executable is installed under that state directory. Keep paths quoted so custom
+directories containing spaces work. Run the scanner:
 
 ```bash
-python3 ~/.claude/bin/cortex init
+cortex_state_dir="${CORTEX_HOME:-${CLAUDE_DIR:-$HOME/.claude}}"
+cortex_executable="$cortex_state_dir/bin/cortex"
+python3 "$cortex_executable" init
 ```
 
 It writes `<state-dir>/cortex-inventory.json` and prints a summary. **Read the JSON.** It lists their agents (counted by division), skills, commands, MCP servers, hooks, plugins, detected other-agent config files (Cursor / Codex / Gemini / Aider / Windsurf), and relevant CLIs on PATH.
@@ -43,21 +48,24 @@ Then draft a **Decision Shortcuts** table (`task type → default route → tier
 
 ## 4. Merge — non-destructive, always
 
-- If `~/.claude/cortex.md` does **not** exist yet: `install.sh` created it from the template. Replace its `## Workflow Registry` section with your synthesized one.
+- Use `$cortex_state_dir/cortex.md` as the registry and read the inventory from
+  `$cortex_state_dir/cortex-inventory.json`.
+- If the registry does **not** exist yet, draft it from the repository template
+  and your synthesized sections, then show it for confirmation before writing.
 - If it **exists**:
   1. **Back it up first:**
      ```bash
-     cp ~/.claude/cortex.md ~/.claude/cortex.md.bak-$(date +%Y%m%dT%H%M%S)
+     cp "$cortex_state_dir/cortex.md" "$cortex_state_dir/cortex.md.bak-$(date +%Y%m%dT%H%M%S)"
      ```
   2. Replace **only** the `## Workflow Registry` section (its heading up to the next `##`) and the `## Decision Shortcuts` table. **Preserve** their Routing Protocol, Effort Calibration, and Self-Learning Loop sections verbatim — those are the framework, not their tools.
   3. Show the user a **diff** of what changed and **confirm before writing.**
 
-When unsure, write your synthesized registry to `~/.claude/cortex.md.generated` and ask them to merge by hand. Never clobber a hand-customized `cortex.md`.
+When unsure, write your synthesized registry to `$cortex_state_dir/cortex.md.generated` and ask them to merge by hand. Never clobber a hand-customized `cortex.md`.
 
 ## 5. Verify
 
 ```bash
-python3 ~/.claude/bin/cortex doctor
+python3 "$cortex_executable" doctor
 ```
 
 Confirm the registry lines up with what's installed. Tell the user they can re-run `/cortex-init` (or `cortex init`) any time they add a tool.

@@ -1,5 +1,50 @@
 # Astra and ChatGPT Work delegation
 
+## Publish reviewed repairs, 14 September 2026
+
+- [x] Verify the repository changes and regressions before publication.
+- [ ] Commit and push the reviewed frontend library and Cortex repairs.
+- [ ] Confirm the remote commit and record the result. Do not merge.
+
+Almanac stays running by explicit user request. Intake and its scout stay paused.
+Personal intake state and the private repair bundle remain outside Git. Preserve
+the pre-existing untracked AGENTS.md and original intake test fixture.
+
+## Astra review repairs, 13 September 2026
+
+- [x] Stop Cortex Telegram intake and disable its weekly scout reversibly.
+- [x] Repair queue concurrency and route/correction identity.
+- [x] Repair evaluation collapse, caching, nullable text and comparator consistency.
+- [x] Repair installer ownership, sync conflicts and frontend edge cases.
+- [x] Restore and verify intake confinement with a persistent pause gate.
+- [x] Install verified live repairs with backups, keeping Telegram stopped.
+- [x] Run affected suites and record remaining evidence gaps.
+
+### Repair verification
+
+- Existing CLI suite: all eight sections pass.
+- Runtime integrity: 22 pass, including mixed CLI/intake writers and same-name projects.
+- Evaluation integrity: 18 pass, including interrupted attempts and transcript attribution.
+- Installer/sync: 11 pass. Frontend: 17 pass; frontend installer: 4 pass.
+- Delegation contract, generated-library drift (53 entries), shell syntax and diff checks pass.
+- Final intake suite: 51 pass, 2 obsolete blocklist tests skipped, 1 observed outbound-network expected failure.
+- Independent Astra re-review cleared targeted intake fixes. All builds are now
+  stage-only, with restricted reads and no automatic registry application.
+- Five personal intake files installed and compared to the tested bundle. Live
+  worker and bot both refuse startup under `.paused`; reminder is silent.
+- Backups: `/Users/amit/.claude/cortex-repair-backup-20260913-NYrscX/`.
+- Cortex doctor: 24 pass, 5 warnings, 0 failures. Warnings concern personalized
+  skills and never-used registrations, not evidence to retire those tools.
+- No-model routing and replay dry runs cover 14 cases and 42 items. No new ranker
+  was promoted. Historical outcome coverage remains around 81%, below the 85% floor.
+- Real model CLI compatibility and outbound-network isolation remain unverified
+  or incomplete. Intake and scout must stay paused. The separate Almanac bot was
+  left running, confirmed by Amit on 14 September. Seven queued intake items are preserved.
+- No push or merge. Original untracked AGENTS.md and intake test fixture preserved.
+
+Operational details: [intake maintenance](../docs/intake-operations.md). Private
+security evidence and tests remain in `.omc/intake-repair/REPORT.md` and its bundle.
+
 ## Frontend design library, approved 13 September 2026
 
 - [x] One Astra review of the initial plan; present revised scope.

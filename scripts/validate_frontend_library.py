@@ -51,6 +51,10 @@ def normalized_url(value):
             address = ipaddress.ip_address(host)
         except ValueError:
             address = None
+        # Browsers accept shortened, octal, hex and integer IPv4 spellings.
+        # Require canonical IP literals rather than interpreting ambiguous hosts.
+        if address is None and re.fullmatch(r'(?:[0-9]+|0x[0-9a-f]+)', host.rsplit('.', 1)[-1]):
+            raise ValueError('non-canonical numeric hosts are forbidden')
         if address is not None and not address.is_global:
             raise ValueError('private addresses are forbidden')
         port = parts.port

@@ -81,8 +81,15 @@ property of it.
 python3 eval/route_eval.py --dry-run          # list cases, spend nothing
 python3 eval/route_eval.py                    # full suite, ~$0.50/case
 python3 eval/route_eval.py --kind rule --repeat 3
-python3 eval/route_eval.py --if-changed       # skip when no input hash moved
+python3 eval/route_eval.py --if-changed       # reuse only a matching successful run
 ```
+
+Reuse requires complete successful coverage and matching model, routing documents,
+case specification, harness, CLI, repeat count and execution mode. Failed,
+incomplete and legacy reports are cache misses. `--dry-run` never invokes a model.
+Each real attempt is recorded as incomplete before workers start. Final reports
+are published atomically, and replacing an explicit output file preserves its
+previous bytes in a sibling history directory.
 
 Four case kinds, in ascending order of how much they prove:
 

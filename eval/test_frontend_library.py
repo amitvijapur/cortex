@@ -3,6 +3,7 @@
 from html.parser import HTMLParser
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -99,6 +100,18 @@ class ValidationTests(unittest.TestCase):
             for field in ('title', 'purpose', 'notes', 'category', 'tags', 'used_in'):
                 with self.subTest(field=field, value=value), self.assertRaises(ValidationError):
                     validate([resource(**{field: [value] if field in ('tags', 'used_in') else value})])
+
+    def test_browser_numeric_host_variants(self):
+        for host in ('127.1', '127.0.1', '2130706433', '0x7f000001',
+                     '0177.0.0.1', '0177.1', '0x7f.1', '127.0x1',
+                     '127.1.', '127.000.000.001', '0300.0250.0.1',
+                     '0x0a.1', '0.1', '0xffffffff', '256.1',
+                     'example.1', 'example.0x7f'):
+            with self.subTest(host=host), self.assertRaises(ValidationError):
+                validate([resource(url=f'https://{host}/')])
+        for host in ('8.8.8.8', 'example.com', 'v2.example.com', '[2606:4700:4700::1111]'):
+            with self.subTest(host=host):
+                validate([resource(url=f'https://{host}/')])
 
 
 class BuildTests(unittest.TestCase):
@@ -216,6 +229,63 @@ class BuildTests(unittest.TestCase):
         self.write([])
         self.assertEqual(build(self.root), 0)
         self.assertIn('0 of 0 entries', (self.root / 'frontend/site/index.html').read_text())
+
+    def test_resource_ids_cannot_collide_with_interface_ids(self):
+        slugs = ('empty', 'search', 'category', 'kind', 'status', 'count', 'entries', 'resource-empty')
+        records = [resource(id=slug, url=f'https://example.com/{slug}') for slug in slugs]
+        validate(records)
+        parsed = Document(render_site(records))
+        identifiers = [attrs['id'] for _, attrs in parsed.nodes if 'id' in attrs]
+        self.assertEqual(len(identifiers), len(set(identifiers)))
+        entries = [attrs for _, attrs in parsed.nodes if attrs.get('class') == 'entry']
+        self.assertEqual({attrs['id'] for attrs in entries}, {f'resource-{slug}' for slug in slugs})
+        self.assertTrue(all('hidden' not in attrs for attrs in entries))
+        self.assertEqual(next(tag for tag, attrs in parsed.nodes if attrs.get('id') == 'empty'), 'p')
+
+    @unittest.skipUnless(shutil.which('node'), 'Node is required to execute the generated filter script')
+    def test_filter_script_with_interface_named_resources(self):
+        page = render_site([resource(id='empty', title='Needle'),
+                            resource(id='search', title='Other', url='https://example.com/other')])
+        payload = {'nodes': Document(page).nodes,
+                   'script': page.split('<script>', 1)[1].split('</script>', 1)[0]}
+        # A small DOM adapter exercises the generated script using the generated
+        # elements in document order, including getElementById's first-match rule.
+        harness = r'''
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const input = JSON.parse(require('node:fs').readFileSync(0, 'utf8'));
+const nodes = input.nodes.map(([tag, attrs]) => ({tag, ...attrs, value: '',
+  hidden: Object.hasOwn(attrs, 'hidden'), textContent: '', listeners: {},
+  dataset: Object.fromEntries(Object.entries(attrs).filter(([k]) => k.startsWith('data-'))
+    .map(([k,v]) => [k.slice(5),v])),
+  addEventListener(event, fn) { this.listeners[event] = fn; }}));
+const document = {
+  getElementById: id => nodes.find(n => n.id === id),
+  querySelector: selector => nodes.find(n => n.class === selector.slice(1)),
+  querySelectorAll: selector => nodes.filter(n => n.class === selector.slice(1))
+};
+vm.runInNewContext(input.script, {document});
+const entries = document.querySelectorAll('.entry');
+const controls = document.querySelector('.filters');
+const search = document.getElementById('search');
+assert.equal(controls.hidden, false);
+assert.equal(document.getElementById('count').textContent, '2 of 2 entries');
+assert(entries.every(e => !e.hidden));
+assert.equal(document.getElementById('empty').hidden, true);
+search.value = 'needle'; controls.listeners.input();
+assert.deepEqual(entries.map(e => e.hidden), [false, true]);
+assert.equal(document.getElementById('count').textContent, '1 of 2 entries');
+search.value = 'no matches'; controls.listeners.input();
+assert(entries.every(e => e.hidden));
+assert.equal(document.getElementById('empty').hidden, false);
+assert.equal(document.getElementById('count').textContent, '0 of 2 entries');
+search.value = ''; controls.listeners.change();
+assert(entries.every(e => !e.hidden));
+assert.equal(document.getElementById('empty').hidden, true);
+'''
+        result = subprocess.run(['node', '-e', harness], input=json.dumps(payload),
+                                text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == '__main__':

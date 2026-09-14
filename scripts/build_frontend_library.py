@@ -68,7 +68,7 @@ def render_site(records):
         if r['kind'] == 'resource':
             title = f'<a href="{esc(r["url"])}" rel="noopener noreferrer">{title}</a>'
         searchable = ' '.join(str(v) if not isinstance(v, list) else ' '.join(v) for v in r.values()).lower()
-        rows.append(f'''<li class="entry" id="{esc(r['id'])}" data-category="{esc(r['category'])}" data-kind="{r['kind']}" data-status="{r['status']}" data-search="{esc(searchable)}">
+        rows.append(f'''<li class="entry" id="resource-{esc(r['id'])}" data-category="{esc(r['category'])}" data-kind="{r['kind']}" data-status="{r['status']}" data-search="{esc(searchable)}">
 <div class="meta"><div class="category">{esc(r['category'])}</div><div>{r['kind'].title()} · <span class="status">{r['status']}</span></div></div>
 <div><h2>{title}</h2><p class="purpose">{esc(r['purpose'])}</p><div class="tags">{esc(' · '.join(r['tags']))}</div>
 <details><summary>Reference notes</summary><p>{esc(r['notes'])}</p><p>Used in: {esc(', '.join(r['used_in']) or 'No recorded projects')}<br>Added: {r['added']} · Last checked: {r['last_checked'] or 'Not checked'}</p></details></div></li>''')

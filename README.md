@@ -90,6 +90,12 @@ Verify with `python3 ~/.claude/bin/cortex doctor`.
 
 It does not touch `settings.json`.
 
+The installer checks destinations before copying. It refuses symlinks and genuine
+skill customizations instead of overwriting them. Untouched prior releases are
+recognized using installation hashes or exact versions in this checkout's Git
+history. Resolve reported conflicts manually; do not replace a personalized skill
+just to make installation pass.
+
 <details>
 <summary><b>Optional: a self-audit at session start</b></summary>
 
@@ -307,6 +313,13 @@ python3 eval/test_cortex_cli.py           # behavioural tests for the CLI
 ```
 
 Everything degrades gracefully on an empty log. A fresh install says there is nothing to report rather than crashing.
+
+Outcome and reroute updates default to the latest route in the current canonical
+working directory and agent session, including a route already marked partial.
+Folder names are display labels, not identity. They do not fall back to
+another project or session. For older routes or shells without a session identity,
+inspect `cortex history <task_hash>` and pass the exact route ID with `--ref`.
+Ambiguous legacy references are reported and left unapplied.
 
 **Slash commands** in Claude Code: `/cortex-log` (recent routes with reasoning), `/cortex-learn` (detect patterns, write proposals), `/cortex-learn --check` (one line, silent if nothing pending), `/cortex-reroute "new route"`.
 

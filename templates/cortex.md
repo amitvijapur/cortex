@@ -203,6 +203,12 @@ Tags always live in the log (`tier_reason`, `system_reason`). The in-session dis
 
 ### Commands
 
+Outcome and reroute updates target the latest route in the current canonical
+working directory and agent session, not the global last entry. Historical rows
+without that identity require an explicit `--ref <route-id>`, found through
+`cortex history <task_hash>`. A partial outcome can be updated to shipped on the
+same route. Ambiguous references are refused rather than assigned by guesswork.
+
 | Command | Purpose |
 |---------|---------|
 | `/cortex-log` | Show last 20 routes with full reasoning. Pass `--project X` to filter |

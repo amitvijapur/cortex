@@ -6,8 +6,8 @@ Subcommands:
   log-line     append a routing decision from a natural routing line
   show         display recent routes with reasoning (filterable by --project)
   learn        detect patterns in the log; writes Obsidian proposals
-  reroute      mark the last entry as corrected
-  outcome      set the last entry's outcome (shipped / abandoned / partial / corrected)
+  reroute      correct a route by --ref or the current project/session's latest
+  outcome      set that route's outcome (shipped / abandoned / partial / corrected)
   history      show a route's full correction chain (what it looked like before)
   hint         surface similar past routes for a task, weighted by outcome
   audit-tiers  list L3/L4 routes so you can check whether L2 would have sufficed
@@ -33,6 +33,7 @@ THE LOG IS APPEND-ONLY.
 """
 import argparse
 import concurrent.futures
+import fcntl
 import hashlib
 import json
 import os
@@ -40,7 +41,9 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections import Counter, defaultdict
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -229,6 +232,14 @@ def project_name():
         return "unknown"
 
 
+def project_ref():
+    """Canonical working directory; project names are display labels, not IDs."""
+    try:
+        return str(Path.cwd().resolve())
+    except OSError:
+        return None
+
+
 def read_raw_log():
     """Every line in the log, exactly as written: route events and correction events."""
     if not LOG_PATH.exists():
@@ -256,8 +267,36 @@ def entry_id(row):
     eid = row.get("event_id")
     if eid:
         return eid
+    seed = json.dumps(row, sort_keys=True, separators=(",", ":"))
+    return "lg_v2_" + hashlib.sha256(seed.encode()).hexdigest()[:24]
+
+
+def legacy_entry_id(row):
+    """Original lossy ID, retained only as a compatibility alias."""
     seed = "|".join(str(row.get(k)) for k in ("ts", "task_hash", "system", "pattern"))
     return "lg_" + hashlib.sha1(seed.encode()).hexdigest()[:12]
+
+
+def route_refs(row):
+    refs = {entry_id(row)}
+    if not row.get("event_id"):
+        refs.add(legacy_entry_id(row))
+    return refs
+
+
+def indexed_routes(raw):
+    routes, by_id = [], defaultdict(list)
+    for row in raw:
+        if (row.get("event") or "route") in CORRECTION_KINDS:
+            continue
+        e = dict(row)
+        e["_id"] = entry_id(row)
+        e["_refs"] = sorted(route_refs(row))
+        e["_corrections"] = []
+        for ref in e["_refs"]:
+            by_id[ref].append(e)
+        routes.append(e)
+    return routes, by_id
 
 
 def apply_correction(entry, ev):
@@ -287,31 +326,27 @@ def collapse(raw):
 
     One place computes this so `show`, `hint`, `learn`, `audit-tiers` and `doctor`
     can't disagree about the state of a route. The returned dicts are copies with
-    two in-memory-only keys (`_id`, `_corrections`); nothing writes them back.
+    in-memory-only keys (`_id`, `_refs`, `_corrections`); nothing writes them back.
+    Old IDs remain aliases only when unambiguous; collisions never pick a row.
     """
-    routes, by_id, events = [], {}, []
-    for row in raw:
-        if (row.get("event") or "route") in CORRECTION_KINDS:
-            events.append(row)
-            continue
-        e = dict(row)
-        e["_id"] = entry_id(row)
-        e["_corrections"] = []
-        by_id[e["_id"]] = e
-        routes.append(e)
+    routes, by_id = indexed_routes(raw)
+    events = [row for row in raw if row.get("event") in CORRECTION_KINDS]
     for ev in events:  # file order is application order, so later events win
-        target = by_id.get(ev.get("ref"))
-        if target is not None:
-            apply_correction(target, ev)
+        targets = by_id.get(ev.get("ref"), [])
+        if len(targets) == 1:
+            apply_correction(targets[0], ev)
+        elif len(targets) > 1:
+            print(f"ambiguous correction ref {ev.get('ref')!r}: "
+                  f"{len(targets)} routes; correction ignored", file=sys.stderr)
     return routes
 
 
 def orphan_events(raw):
-    """Correction events whose target route is missing — a hand-edited log, or an
-    event written against a row that was later removed. doctor surfaces these."""
-    ids = {entry_id(r) for r in raw if (r.get("event") or "route") not in CORRECTION_KINDS}
+    """Unresolvable corrections, including ambiguous IDs. doctor surfaces these."""
+    _, by_id = indexed_routes(raw)
     return [r for r in raw
-            if (r.get("event") or "route") in CORRECTION_KINDS and r.get("ref") not in ids]
+            if (r.get("event") or "route") in CORRECTION_KINDS
+            and len(by_id.get(r.get("ref"), [])) != 1]
 
 
 def read_log():
@@ -372,6 +407,7 @@ def make_entry(task, classification, system, pattern, agent, tier,
         "cortex_md_sha": cortex_md_sha(),
         "session_id": session_id(),
         "project": project or project_name(),
+        "project_ref": project_ref(),
         "task": task,
         "task_hash": task_hash(task),
         "class": classification,
@@ -768,12 +804,41 @@ def route_line(e):
     return f"{e.get('system', '?')} > {e.get('pattern', '?')} @ {e.get('tier', '?')}"
 
 
+def correction_target(entries, ref=None):
+    """Explicit IDs may cross scopes; implicit selection never does.
+
+    Select the latest task, even if it already has an outcome. Searching for an
+    unfinished task would send a partial -> shipped update to an older task.
+    Rows without a reliable session and canonical project path need explicit refs.
+    """
+    if ref is not None:
+        matches = [e for e in entries if ref in e["_refs"]]
+        if len(matches) != 1:
+            reason = "ambiguous" if matches else "unknown"
+            print(f"{reason} route ref {ref!r}; use a unique route ID from history",
+                  file=sys.stderr)
+            return None
+        target = matches[0]
+    else:
+        session = agent_session_id()
+        project = project_ref()
+        matches = [e for e in entries if session and project
+                   and e.get("session_ref") == session and e.get("project_ref") == project]
+        if not matches:
+            print("no route for this project and session; use --ref with a route ID",
+                  file=sys.stderr)
+            return None
+        target = matches[-1]
+    if sum(e["_id"] == target["_id"] for e in entries) != 1:
+        print(f"ambiguous route ID {target['_id']!r}; no correction written", file=sys.stderr)
+        return None
+    return target
+
+
 def cmd_reroute(args):
-    entries = read_log()
-    if not entries:
-        print("no entries to reroute")
-        return
-    last = entries[-1]
+    last = correction_target(read_log(), args.ref)
+    if last is None:
+        return 1
     prev_route = route_line(last)
     append_event("reroute", last["_id"], outcome="corrected", user_correction=args.to)
     print(f"marked last route as corrected: {prev_route} → {args.to}")
@@ -781,18 +846,9 @@ def cmd_reroute(args):
 
 
 def cmd_outcome(args):
-    entries = read_log()
-    if not entries:
-        print("cortex log is empty — nothing to mark")
-        return 0
-    # Target this project's route, not the globally-last entry: concurrent
-    # sessions in other projects log interleaved, so entries[-1] can belong to
-    # someone else's route. Prefer the latest still-open entry for the current
-    # project; fall back to the project's latest entry, then to the global last.
-    proj = project_name()
-    pool = [e for e in entries if e.get("project") == proj] or entries
-    open_entries = [e for e in pool if not e.get("outcome")]
-    last = (open_entries or pool)[-1]
+    last = correction_target(read_log(), args.ref)
+    if last is None:
+        return 1
     if last.get("outcome") == "corrected":
         print(f"last entry is already marked corrected (user_correction={last.get('user_correction')!r}); leaving as-is")
         return 0
@@ -815,7 +871,7 @@ def cmd_history(args):
     entries = read_log()
     key = args.ref
     matches = [e for e in entries
-               if key in (e.get("task_hash"), e.get("_id"), e.get("event_id"))]
+               if key == e.get("task_hash") or key in e["_refs"]]
     if not matches:
         print(f"no route matching {key!r} (try a task_hash from `cortex show` or `audit-tiers`)")
         return 1
@@ -824,7 +880,7 @@ def cmd_history(args):
     for e in matches:
         print(format_entry(e))
         print(f"  id:    {e['_id']}")
-        for field in ("run_id", "session_ref", "model", "cortex_md_sha"):
+        for field in ("run_id", "session_ref", "project_ref", "model", "cortex_md_sha"):
             if e.get(field):
                 print(f"  {field + ':':<14}{e[field]}")
         corrections = e.get("_corrections") or []
@@ -989,6 +1045,8 @@ def cmd_audit_tiers(args):
             print(f"note: {len(targets)} routes share task_hash={args.reclassify_hash} "
                   f"— reclassifying the most recent one")
         target = targets[-1]
+        if correction_target(entries, target["_id"]) is None:
+            return 1
         original = target.get("tier")
         if original == args.reclassify_to:
             print(f"{args.reclassify_hash} is already {args.reclassify_to} — nothing to do")
@@ -1282,7 +1340,7 @@ def cmd_doctor(args):
     orphans = orphan_events(raw)
     if orphans:
         issues["warn"].append(
-            f"{len(orphans)} correction event(s) reference a route that is not in the log "
+            f"{len(orphans)} correction event(s) reference a route that is not in the log or is ambiguous "
             f"— the log may have been edited by hand; those corrections are being ignored")
     n_events = len(raw) - total
     if n_events:
@@ -1366,6 +1424,42 @@ def cmd_doctor(args):
 
 
 # ---------- intake inbox + pending-installs queue ----------
+@contextmanager
+def queue_transaction(path):
+    """Lock a stable sidecar, not the queue inode replaced at commit time.
+
+    Every writer must hold this lock from before its read through replacement.
+    Readers need no lock: replacement exposes either complete snapshot.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.with_name(path.name + ".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def atomic_queue_write(path, entries):
+    """Replace a queue snapshot. Caller holds its transaction lock."""
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                         prefix=path.name + ".", suffix=".tmp",
+                                         delete=False) as f:
+            temp_path = Path(f.name)
+            if path.exists():
+                os.fchmod(f.fileno(), path.stat().st_mode & 0o777)
+            for entry in entries:
+                f.write(json.dumps(entry) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
 def read_inbox():
     if not INBOX_PATH.exists():
         return []
@@ -1382,7 +1476,7 @@ def read_inbox():
 
 
 def write_inbox(entries):
-    INBOX_PATH.write_text("".join(json.dumps(e) + "\n" for e in entries))
+    atomic_queue_write(INBOX_PATH, entries)
 
 
 def _inbox_id():
@@ -1391,6 +1485,13 @@ def _inbox_id():
 
 
 def cmd_intake(args):
+    if args.action in ("add", "resolve"):
+        with queue_transaction(INBOX_PATH):
+            return _cmd_intake(args)
+    return _cmd_intake(args)
+
+
+def _cmd_intake(args):
     action = args.action
     entries = read_inbox()
 
@@ -1490,10 +1591,17 @@ def read_installs():
 
 
 def write_installs(entries):
-    INSTALL_QUEUE_PATH.write_text("".join(json.dumps(e) + "\n" for e in entries))
+    atomic_queue_write(INSTALL_QUEUE_PATH, entries)
 
 
 def cmd_installs(args):
+    if args.action in ("add", "done", "skip", "clear"):
+        with queue_transaction(INSTALL_QUEUE_PATH):
+            return _cmd_installs(args)
+    return _cmd_installs(args)
+
+
+def _cmd_installs(args):
     action = args.action
     entries = read_installs()
 
@@ -1831,15 +1939,17 @@ def build_parser():
                     help="don't dedup against proposals already marked approved/rejected/superseded")
     ln.set_defaults(func=cmd_learn)
 
-    rr = sub.add_parser("reroute", help="mark last entry as corrected")
+    rr = sub.add_parser("reroute", help="correct a route by ID or current project/session")
     rr.add_argument("--to", required=True, help="the corrected route")
+    rr.add_argument("--ref", help="exact route ID; default: latest route in this project and session")
     rr.set_defaults(func=cmd_reroute)
 
-    oc = sub.add_parser("outcome", help="set the last entry's outcome")
+    oc = sub.add_parser("outcome", help="set a route outcome by ID or current project/session")
     oc.add_argument("state", choices=OUTCOME_STATES,
                     help="shipped (worked, done) / abandoned (route was wrong, moved on) / "
                          "partial (some progress, stopped before goal) / corrected (rerouted mid-flow)")
     oc.add_argument("--note", default=None, help="optional free-text note")
+    oc.add_argument("--ref", help="exact route ID; default: latest route in this project and session")
     oc.set_defaults(func=cmd_outcome)
 
     hi = sub.add_parser("history", help="show a route's full correction chain")
