@@ -3,8 +3,12 @@
 ## Publish reviewed repairs, 14 September 2026
 
 - [x] Verify the repository changes and regressions before publication.
-- [ ] Commit and push the reviewed frontend library and Cortex repairs.
-- [ ] Confirm the remote commit and record the result. Do not merge.
+- [x] Commit and push the reviewed frontend library and Cortex repairs.
+- [x] Confirm the remote commit and record the result. Do not merge.
+
+Published the library commit `51cb9f4` and repair commit `4d1cfe4` to
+`origin/codex/frontend-design-library`. All repository regressions passed again,
+and the prospective tracked-tree secret scan found no leaks. No merge performed.
 
 Almanac stays running by explicit user request. Intake and its scout stay paused.
 Personal intake state and the private repair bundle remain outside Git. Preserve
