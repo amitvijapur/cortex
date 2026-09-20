@@ -1,5 +1,29 @@
 # Astra and ChatGPT Work delegation
 
+## Optional Jev routing adviser, 20 September 2026
+
+- [x] Scope the current CLI, registry, hooks and evaluations against the brief.
+- [x] Implement off/shadow/advisory with current-session candidates and safe fallbacks.
+- [x] Add isolated evaluation, reviewed-case workflow and complete cost accounting.
+- [x] Verify behavior, compatibility, installer and independent review findings.
+- [x] Update README, setup/rollback guidance and Obsidian build log.
+- [x] Stage only this change, commit and push a dedicated GitHub branch.
+
+Design: a separate `cortex advise` command leaves existing `hint` intact. A
+host-supplied session manifest bounds whole workflow candidates. Jev supplies
+classification and workflow advice only; the session model retains effort,
+planning and execution. Off is the default, shadow hides suggestions from the
+decision maker, and all failures preserve the existing routing path. Experiment
+events are isolated from production route/outcome records. No live quality claim
+without live Jev and comparable session-model runs on independently reviewed data.
+
+Review: implementation commit `250d273` pushed to `codex/jev-routing-adviser`.
+All 46 new tests pass, along with eight CLI sections, 18 existing evaluation
+tests and 11 installer tests. Runtime integrity has 20 passes and two existing
+personal-intake skips. Independent reviews cleared the implementation and
+evaluation; the staged secret scan found no leaks. Jev remains off, with live
+provider and matched quality/cost/latency checks documented as outstanding.
+
 ## Publish reviewed repairs, 14 September 2026
 
 - [x] Verify the repository changes and regressions before publication.
