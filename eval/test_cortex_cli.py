@@ -14,6 +14,7 @@ WHY THIS EXISTS
 
     Run:  python3 eval/test_cortex_cli.py [-v]
 """
+import hashlib
 import json
 import os
 import shutil
@@ -43,6 +44,7 @@ class Sandbox:
 
     def __init__(self, seed_legacy=True):
         self.dir = Path(tempfile.mkdtemp(prefix="cortex-test-"))
+        self.session = "test-" + self.dir.name
         (self.dir / "bin").mkdir()
         (self.dir / "skills").mkdir()
         (self.dir / "agents").mkdir()
@@ -54,6 +56,7 @@ class Sandbox:
     def run(self, *args, env=None, timeout=60):
         e = dict(os.environ)
         e["CORTEX_HOME"] = str(self.dir)
+        e["CORTEX_SESSION_ID"] = self.session
         e.pop("CORTEX_OBSIDIAN_ROOT", None)   # don't audit the real vault
         e.pop("CORTEX_REPO", None)
         e.update(env or {})
@@ -219,18 +222,32 @@ def test_append_only_roundtrip(sb):
 
 
 def test_outcome_targeting(sb):
-    print("\n[3] outcome targets the open route in this project")
-    # The legacy row 'bbbb' has no outcome and belongs to project 'cortex'.
+    print("\n[3] outcome stays on the current task; legacy routes need explicit refs")
+    # The latest task was corrected in section 2. An older unfinished legacy
+    # route must not steal its follow-up outcome, even in the same project.
     cwd = REPO  # project_name() == 'cortex'
     e = dict(os.environ)
     e["CORTEX_HOME"] = str(sb.dir)
+    e["CORTEX_SESSION_ID"] = sb.session
+    before = sb.lines()
     r = subprocess.run([sys.executable, str(CORTEX), "outcome", "partial"],
                        capture_output=True, text=True, env=e, cwd=cwd, timeout=60)
     check("outcome exits 0", r.returncode == 0, r.stderr[-300:])
+    check("implicit outcome does not fall back to older unfinished task", sb.lines() == before)
+    # Historical IDs remain valid aliases when unique, allowing deliberate
+    # updates to legacy routes without pretending they belong to this session.
+    row = LEGACY_ROWS[1]
+    seed = "|".join(str(row.get(k)) for k in ("ts", "task_hash", "system", "pattern"))
+    ref = "lg_" + hashlib.sha1(seed.encode()).hexdigest()[:12]
+    r = subprocess.run([sys.executable, str(CORTEX), "outcome", "partial", "--ref", ref],
+                       capture_output=True, text=True, env=e, cwd=cwd, timeout=60)
+    check("explicit legacy outcome exits 0", r.returncode == 0, r.stderr[-300:])
+    check("explicit outcome appends exactly one event", len(sb.lines()) == len(before) + 1)
+    check("explicit outcome preserves original rows", sb.lines()[:len(before)] == before)
     ev = json.loads(sb.lines()[-1])
-    check("targeted the still-open legacy row", ev.get("ref", "").startswith("lg_"), json.dumps(ev))
-    r = sb.run("show", "--last", "10")
-    check("legacy row now shows PARTIAL", "[PARTIAL]" in r.stdout, r.stdout)
+    check("targeted the explicitly selected legacy row", ev.get("ref", "").startswith("lg_v2_"), json.dumps(ev))
+    r = sb.run("history", row["task_hash"])
+    check("selected legacy row now shows PARTIAL", "[PARTIAL]" in r.stdout, r.stdout)
 
 
 def test_orphan_events(sb):

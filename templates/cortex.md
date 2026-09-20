@@ -13,7 +13,7 @@ Before starting any non-trivial task:
 
 1. **Classify** — build / review / plan / research / debug / design / quick fix
 2. **Calibrate** — pick effort tier (L1–L4) using heuristics in the Effort Calibration section. **Apply the anti-inflation rule first.**
-3. **Hint** — run `python3 ~/.claude/bin/cortex hint "<task>" --class <c>`. Surfaces similar past routes weighted by outcome (shipped adds signal, corrected / abandoned subtract). **Advisory, not a decision** — factor it in, then still decide. Filter by class only while the log is small (under ~150 routes); adding `--tier` fragments the pool into buckets of 1–5 and returns nothing useful. Reintroduce `--tier <L>` once class-only pools regularly exceed ~15.
+3. **Hint** — run `python3 ~/.claude/bin/cortex hint "<task>" --class <c>`. Shows recent distinct routes in that class, with outcomes and similarity as context, not ranking signals. **Advisory, not a decision** — factor it in, then still decide. Prefer class-only filtering while per-class pools are small.
 4. **Route** — pick the workflow system from the registry below
 5. **Specialise** — pick the pattern + agent(s). **Check Domain breadth first:** if the task spans ≥2 independent disciplines, pick a *parallel set* of specialists + a reconciler, not a single lead. Single-agent is the exception for cross-domain work, not the default.
 6. **State + Log** — one line: `[System] > [Pattern] > [Agent(s)] @ [Tier]` (fan-outs render as `[Agent A ∥ Agent B] → Reconciler`). Log via `cortex log-line` with three structured confidence flags — see **Three confidences** below. The CLI prints auto-trigger hints based on which one is low.
@@ -21,6 +21,24 @@ Before starting any non-trivial task:
 8. **Outcome** — when the task concludes, run `python3 ~/.claude/bin/cortex outcome <shipped|abandoned|partial|corrected> [--note "..."]`. Default to `shipped` if the work landed and the user didn't push back; `partial` if you stopped before the goal; `abandoned` if the route was wrong and you moved on without rerouting. Feeds hint quality for future routes.
 
 **Skip protocol** — for quick lookups, file reads, casual questions, single-line edits: no hint, no calibration, no state line, no log, no outcome. Just do it.
+
+### Optional Jev adviser
+
+Jev is off by default. When explicitly configured, use `cortex advise` with a
+fresh capability manifest supplied by the current host session. The manifest
+must describe callable workflows, not simply files installed on disk. See the
+repository's `docs/jev-adviser.md` for the input contract and setup.
+
+In shadow mode, choose the normal route without reading experimental suggestions.
+In advisory mode, consider a validated classification and workflow recommendation
+before the final route. Keep the normal hint evidence and choose effort separately.
+Explicit user choices, clarification requirements, permissions and policy checks
+take precedence. Missing capabilities, uncertain results or service failures mean
+continue normal routing. Jev never dispatches a workflow or authorizes a tool.
+
+Only actual session routing decisions belong in the production route/outcome log.
+Jev experiment events have a separate destination and must not be passed to
+`cortex outcome` or `cortex reroute`.
 
 ### Three confidences (used at step 6)
 
@@ -202,6 +220,12 @@ Tags always live in the log (`tier_reason`, `system_reason`). The in-session dis
 - **Phase 4 — Outcome + correction capture (active):** every routed task ends with an outcome — `shipped`, `abandoned`, `partial`, or `corrected` — captured with `cortex outcome <state>`. **Correction triggers** (any of these fires `cortex reroute`, no permission needed): `"reroute"`, `"actually use X"`, `"go back"`, `"switch to X"`, `"this didn't work"`, `"wrong approach"`, `"let me retry with X"`, `"that was wrong, try X"`. The last log entry is marked `outcome=corrected`, `user_correction` holds the new route, and the next logged route gets `redirect_from` linked. Over time this builds the labelled dataset Phase 3 learns from.
 
 ### Commands
+
+Outcome and reroute updates target the latest route in the current canonical
+working directory and agent session, not the global last entry. Historical rows
+without that identity require an explicit `--ref <route-id>`, found through
+`cortex history <task_hash>`. A partial outcome can be updated to shipped on the
+same route. Ambiguous references are refused rather than assigned by guesswork.
 
 | Command | Purpose |
 |---------|---------|

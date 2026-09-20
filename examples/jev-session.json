@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "session_id": "REPLACE_WITH_CURRENT_HOST_SESSION",
+  "generated_at": "REPLACE_WITH_CURRENT_UTC_TIMESTAMP",
+  "capabilities": ["exec_command", "spawn_agent:worker"],
+  "candidates": [
+    {
+      "id": "direct",
+      "system": "Direct",
+      "pattern": "local-execution",
+      "description": "Small, bounded local changes that one session can implement and verify.",
+      "requires": ["exec_command"]
+    },
+    {
+      "id": "delegated-build",
+      "system": "Codex",
+      "pattern": "delegated-build",
+      "agent": "worker",
+      "description": "Implementation with independent bounded worker tasks and parent integration and verification.",
+      "requires": ["exec_command", "spawn_agent:worker"]
+    }
+  ]
+}

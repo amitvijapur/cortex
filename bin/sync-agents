@@ -11,7 +11,9 @@ the loss is invisible until retrieval quality drops.
 rewrote the description" apart from "upstream rewrote the body", because after a pull both
 files differ from each other on both counts. Distinguishing them needs the common ancestor:
 the commit the install was last copied from. That commit is recorded in
-`~/.claude/agents/.synced-from` on every apply, so subsequent runs need no argument. The
+`~/.claude/agents/.synced-from` on every apply, so subsequent runs need no argument.
+Unresolved files retain their original commits in `.synced-bases.json`; resolving a
+file by matching upstream clears that exception on the next apply. The
 first run on an install that predates the stamp has to be told with --base.
 
 Per file, against base / local / upstream:
@@ -30,6 +32,7 @@ Dry run by default. Nothing is written without --apply.
     python3 bin/sync-agents --apply
 """
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -39,6 +42,7 @@ from pathlib import Path
 SRC = Path.home() / "Desktop" / "tools" / "agency-agents-src"
 DST = Path.home() / ".claude" / "agents"
 STAMP = ".synced-from"
+BASES = ".synced-bases.json"
 SKIP_DIRS = {"examples", "scripts", ".git", ".github"}
 
 # A description is a YAML scalar that may run over several lines: upstream writes some as
@@ -117,6 +121,20 @@ def main():
     if git(src, "cat-file", "-e", f"{base}^{{commit}}") is None:
         sys.exit(f"base commit {base} is not in {src}")
 
+    # The global stamp describes successful files. Conflicts retain their own
+    # original ancestor until resolved, even across additional upstream commits.
+    bases_path = dst / BASES
+    try:
+        bases = json.loads(bases_path.read_text()) if bases_path.exists() else {}
+        if not isinstance(bases, dict) or not all(
+                isinstance(k, str) and isinstance(v, str) for k, v in bases.items()):
+            raise ValueError("expected a path-to-commit object")
+        for commit in set(bases.values()):
+            if git(src, "cat-file", "-e", f"{commit}^{{commit}}") is None:
+                raise ValueError(f"missing merge base {commit}")
+    except (ValueError, OSError) as exc:
+        sys.exit(f"invalid {bases_path}: {exc}")
+
     head = (git(src, "log", "-1", "--format=%h %cs") or "?").strip()
     print(f"source : {src}  @ {head}")
     print(f"base   : {base}  (what the install was copied from)")
@@ -137,7 +155,8 @@ def main():
             current.append(rel)
             continue
 
-        b = git(src, "show", f"{base}:{rel.as_posix()}")
+        file_base = bases.get(rel.as_posix(), base)
+        b = git(src, "show", f"{file_base}:{rel.as_posix()}")
         if b is None:
             # Upstream added it after base, yet a file is already installed. Not something
             # this script should guess at.
@@ -187,6 +206,13 @@ def main():
         (dst / rel).write_text(splice((src / rel).read_text(), (dst / rel).read_text()))
 
     full = (git(src, "rev-parse", "HEAD") or "").strip()
+    unresolved = {rel.as_posix() for rel, _ in conflict}
+    # Retain absent upstream conflicts too, in case the file is reintroduced.
+    next_bases = {key: value for key, value in bases.items()
+                  if Path(key) not in s_files or key in unresolved}
+    for key in unresolved:
+        next_bases.setdefault(key, (git(src, "rev-parse", base) or base).strip())
+    bases_path.write_text(json.dumps(next_bases, indent=2, sort_keys=True) + "\n")
     stamp_path.write_text(f"{full}\n")
     print(f"applied: {len(new)} new, {len(update)} updated, {len(merge)} merged")
     print(f"stamped {STAMP} at {full[:9]}")

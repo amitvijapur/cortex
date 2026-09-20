@@ -39,6 +39,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 from datetime import datetime, timezone
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
@@ -77,6 +78,76 @@ def sha(path):
         return hashlib.sha256(Path(path).read_bytes()).hexdigest()[:16]
     except OSError:
         return None
+
+
+def atomic_write(path, data):
+    """Publish a complete report (or evidence copy), never a truncated snapshot."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".report-",
+                                         delete=False) as f:
+            temp = Path(f.name)
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp, path)
+    finally:
+        if temp is not None:
+            temp.unlink(missing_ok=True)
+
+
+def write_report(path, report):
+    atomic_write(path, json.dumps(report, indent=2).encode("utf-8"))
+
+
+def run_inputs(args, cases, batched):
+    """Fingerprint the inputs and execution shape, not just the routing document."""
+    return {
+        "model": args.model,
+        "cortex_md_sha": sha(CLAUDE_DIR / "cortex.md"),
+        "claude_md_sha": sha(CLAUDE_DIR / "CLAUDE.md"),
+        "cases_sha": sha(args.cases),
+        "harness_sha": sha(__file__),
+        "cli_sha": sha(CORTEX_BIN),
+        "cases": cases,
+        "repeat": args.repeat,
+        "minimal_env": args.minimal_env,
+        "no_batch": args.no_batch,
+        "batched_cases": [c["id"] for c in batched],
+    }
+
+
+def successful_results(results, cases, repeat):
+    """Require every requested execution and assertion to succeed before reuse."""
+    if not cases or repeat < 1 or set(results) != {c["id"] for c in cases}:
+        return False
+    for c in cases:
+        r = results[c["id"]]
+        runs = r.get("runs", [])
+        if (len(runs) != repeat or not r.get("modal") or r.get("stable") is not True
+                or r.get("indeterminate")
+                or any(x.get("error") or not x.get("route") for x in runs)):
+            return False
+        if any(x["route"] != r["modal"] for x in runs):
+            return False
+        if is_refusal(r["modal"]):
+            return False
+        if any(check(a, c["id"], results)[0] != "pass" for a in c["assert"]):
+            return False
+    return True
+
+
+def reusable_run(last, inputs):
+    """Legacy, malformed, failed and incomplete reports are cache misses."""
+    try:
+        return (last.get("successful") is True
+                and last.get("inputs") == inputs
+                and all(inputs[k] for k in
+                        ("cortex_md_sha", "claude_md_sha", "cases_sha", "harness_sha", "cli_sha"))
+                and successful_results(last["results"], inputs["cases"], inputs["repeat"]))
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return False
 
 
 def extract_route(text):
@@ -133,6 +204,9 @@ def run_case(case, model, sandbox, claude_bin, minimal_env=False):
     except (json.JSONDecodeError, ValueError):
         return {"error": f"unparseable CLI output: {proc.stdout[:200]}", "cost_usd": 0.0}
 
+    if not isinstance(payload, dict) or proc.returncode or payload.get("is_error"):
+        return {"error": f"CLI failed (exit {proc.returncode})", "cost_usd":
+                (payload.get("total_cost_usd") or 0.0) if isinstance(payload, dict) else 0.0}
     parsed, raw = extract_route(payload.get("result", ""))
     return {
         "raw": raw,
@@ -165,6 +239,12 @@ def run_batch(cases, model, sandbox, claude_bin):
             v["error"] = f"batch failed: {type(exc).__name__}"
         return out
 
+    if not isinstance(payload, dict) or proc.returncode or payload.get("is_error"):
+        for v in out.values():
+            v["error"] = f"batch CLI failed (exit {proc.returncode})"
+        if cases and isinstance(payload, dict):
+            out[cases[0]["id"]]["cost_usd"] = payload.get("total_cost_usd") or 0.0
+        return out
     cost = payload.get("total_cost_usd") or 0.0
     body = payload.get("result") or ""
     for c in cases:  # keep the raw response so a dropped case is diagnosable offline
@@ -275,8 +355,10 @@ def main():
                          "session (much cheaper) and any the model drops are re-run "
                          "individually. Paired cases are never batched")
     ap.add_argument("--if-changed", action="store_true",
-                    help="skip entirely when cortex.md is unchanged since the last run")
+                    help="skip only after a successful run with matching inputs and coverage")
     args = ap.parse_args()
+    if args.repeat < 1 or args.jobs < 1:
+        ap.error("--repeat and --jobs must be positive")
 
     claude_bin = shutil.which("claude")
     if not claude_bin and not args.dry_run:
@@ -284,17 +366,27 @@ def main():
         return 2
 
     spec = json.loads(Path(args.cases).read_text())
+    ids = [c["id"] for c in spec["cases"]]
+    if len(ids) != len(set(ids)):
+        ap.error("case ids must be unique")
+    if args.only and set(args.only) - set(ids):
+        ap.error("--only contains unknown case ids")
     cases = spec["cases"]
     if args.only:
         cases = [c for c in cases if c["id"] in args.only]
     if args.kind:
         cases = [c for c in cases if c["kind"] in args.kind]
     # Paired assertions need their base, so pull those in even if filtered out.
-    needed = {a["base"] for c in cases for a in c["assert"] if "base" in a}
-    have = {c["id"] for c in cases}
-    for c in spec["cases"]:
-        if c["id"] in needed - have:
-            cases.append(c)
+    while True:
+        needed = {a["base"] for c in cases for a in c["assert"] if "base" in a}
+        if needed - set(ids):
+            ap.error("paired assertion references an unknown base case")
+        have = {c["id"] for c in cases}
+        if not needed - have:
+            break
+        cases.extend(c for c in spec["cases"] if c["id"] in needed - have)
+    if not cases:
+        ap.error("no cases selected")
 
     # Paired cases and anything they reference must stay isolated: a shared session
     # would let the base answer anchor the transformed one, which is exactly the delta
@@ -317,13 +409,19 @@ def main():
     print(f"estimated cost: ~${estimate:.2f} at ~${args.cost_per_run:.2f}/session "
           f"(ceiling ${args.max_spend:.2f})\n")
 
-    if args.if_changed:
-        prior = sorted((CLAUDE_DIR / "eval").glob("run-*.json"))
-        cur = sha(CLAUDE_DIR / "cortex.md")
+    inputs = run_inputs(args, cases, batched)
+    if args.if_changed and not args.dry_run:
+        prior = ([Path(args.out)] if args.out else
+                 sorted((CLAUDE_DIR / "eval").glob("run-*.json"),
+                        # Order old second-precision and new microsecond names together.
+                        key=lambda p: p.stem.replace("Z", "")))
         if prior:
-            last = json.loads(prior[-1].read_text())
-            if last.get("cortex_md_sha") == cur:
-                print(f"cortex.md unchanged since {prior[-1].name} (sha {cur}) — nothing to do")
+            try:
+                last = json.loads(prior[-1].read_text())
+            except (OSError, ValueError):
+                last = None
+            if reusable_run(last, inputs):
+                print(f"successful run {prior[-1].name} matches all inputs and coverage; skipping")
                 return 0
 
     if estimate > args.max_spend and not args.dry_run:
@@ -336,6 +434,22 @@ def main():
         for c in cases:
             print(f"  [{c['kind']:<6}] {c['id']:<28} {c['task'][:64]}")
         return 0
+
+    started = datetime.now(timezone.utc)
+    attempt_id = uuid.uuid4().hex
+    out = Path(args.out) if args.out else CLAUDE_DIR / "eval" / \
+        f"run-{started.strftime('%Y%m%dT%H%M%S.%fZ')}-{attempt_id}.json"
+    if out.exists():
+        # Explicit --out reuses a name. Preserve the exact previous evidence before
+        # replacing it, including failed or malformed reports, outside cache lookup.
+        archive = out.parent / f".{out.name}.history" / f"{attempt_id}.json"
+        atomic_write(archive, out.read_bytes())
+    attempt = {"ts": started.isoformat(), "attempt_id": attempt_id,
+               "attempt_status": "incomplete", "successful": False,
+               "inputs": inputs, "results": {}}
+    # Persist before launching anything: exceptions, interrupts and process death
+    # must leave a cache miss, rather than resurrecting an older successful run.
+    write_report(out, attempt)
 
     sandbox = Path(tempfile.mkdtemp(prefix="cortex-eval-"))
     (sandbox / "minimal-settings.json").write_text("{}")
@@ -400,30 +514,33 @@ def main():
         if not r["modal"]:
             print(f"  ! {cid}: no parseable route. raw={r['raw'][:90]!r}")
 
-    out = Path(args.out) if args.out else CLAUDE_DIR / "eval" / \
-        f"run-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps({
-        "ts": datetime.now(timezone.utc).isoformat(),
+    successful = (successful_results(results, cases, args.repeat)
+                  and inputs == run_inputs(args, cases, batched))
+    write_report(out, {
+        **attempt,
+        "attempt_status": "complete",
+        "completed_ts": datetime.now(timezone.utc).isoformat(),
         "model": args.model,
         "minimal_env": args.minimal_env,
         "sessions": sessions,
         "batched_cases": [c["id"] for c in batched],
         "repeat": args.repeat,
+        "inputs": inputs,
+        "successful": successful,
         # Pinning the inputs is what makes two runs comparable. A change in either
         # hash means a difference in results is explained, not a regression.
-        "cortex_md_sha": sha(CLAUDE_DIR / "cortex.md"),
-        "claude_md_sha": sha(CLAUDE_DIR / "CLAUDE.md"),
-        "cases_sha": sha(args.cases),
+        "cortex_md_sha": inputs["cortex_md_sha"],
+        "claude_md_sha": inputs["claude_md_sha"],
+        "cases_sha": inputs["cases_sha"],
         "cost_usd": round(cost, 4),
         "summary": {"passed": npass, "failed": nfail, "refused": tally["refused"],
                     "indeterminate": tally["unstable"], "varied_across_repeats": unstable},
         "assertions": rows,
         "results": {k: {"modal": v["modal"], "stable": v["stable"], "raw": v["raw"],
                         "runs": v["runs"]} for k, v in results.items()},
-    }, indent=2))
+    })
     print(f"\nresults: {out}")
-    return 1 if nfail else 0
+    return 0 if successful else 1
 
 
 if __name__ == "__main__":

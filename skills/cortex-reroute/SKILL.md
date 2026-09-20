@@ -6,7 +6,7 @@ trigger: /cortex-reroute
 
 # /cortex-reroute
 
-Flag the most recent entry in `~/.claude/cortex-log.jsonl` as `outcome=corrected` and record the route the user wanted instead. This is the highest-quality training signal for Phase 3 (similarity bias) when it activates.
+Flag the most recent route in the current project and agent session as `outcome=corrected` and record the route the user wanted instead. This is the highest-quality training signal for Phase 3 (similarity bias) when it activates.
 
 ## When to invoke
 
@@ -24,9 +24,13 @@ python3 ~/.claude/bin/cortex reroute --to "<the route the user wanted>"
 ```
 
 The CLI:
-- Sets `outcome=corrected` on the last log entry
+- Appends a correction for the latest route in the current project and session
 - Stores the user's preferred route in `user_correction`
 - Prints the before → after delta
+
+If the CLI cannot identify that session, inspect `cortex history <task_hash>` and
+pass the intended route's exact ID with `--ref`. Never pick another project's
+route or infer a target from an ambiguous legacy ID.
 
 ### Step 2 — Log the new route
 
@@ -60,6 +64,7 @@ Carry out the user's preferred route. Don't argue with the correction unless the
 ## Do NOT
 
 - Do not invoke this for routes that ran fine — only for explicit corrections
-- Do not modify older log entries; this only touches the most recent
+- Do not rewrite log entries. Append a correction to the current route, or the
+  explicitly selected route when `--ref` is needed.
 - Do not skip step 2 if the user wants the corrected route to run — without `--redirect-from`, the link between old and new is lost
 - Do not push back on the correction — the user's choice wins

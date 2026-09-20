@@ -788,6 +788,7 @@ def build(rows, sessions, anchor_index, anchor_times):
         records.append({
             "schema": SCHEMA_VERSION,
             "kind": "route",
+            "event_id": row.get("event_id") or row.get("_id"),
             "task_hash": row.get("task_hash"),
             "route_ts": row.get("ts"),
             "project": row.get("project"),
@@ -920,10 +921,9 @@ def main(argv=None):
     # is the exact defect this project exists to remove, so there is one view.
     try:
         _cli = SourceFileLoader("cortex_cli", str(REPO / "bin" / "cortex")).load_module()
-        derived = {id(r): r for r in _cli.collapse(raw)} if hasattr(_cli, "collapse") else {}
-        if derived:
-            by_hash = {r.get("task_hash"): r for r in _cli.collapse(raw)}
-            rows = [by_hash.get(r.get("task_hash"), r) for r in rows]
+        # task_hash identifies text, not an execution. Keep each collapsed route's
+        # identity, timestamp and session together with its own corrections.
+        rows = [r for r in _cli.collapse(raw) if is_route(r)]
     except Exception as exc:  # noqa: BLE001
         print(f"  ! could not fold correction events ({exc}); outcome counts may be low",
               file=sys.stderr)

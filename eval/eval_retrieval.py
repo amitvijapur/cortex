@@ -277,11 +277,12 @@ def main():
               f"baseline's own proposal was already right: {prop}")
 
     # ------------------------------------------------------------------------- abstain
-    print("\nabstain behaviour (+content system)")
+    print("\nabstain behaviour (BM25F, label/task split [MAIN])")
     print("-" * 92)
     fired = kept_hit = kept_miss = abst_hit = abst_miss = 0
     for p in pairs:
-        r = search_with_abstain(idx, p["task"], p.get("invented_label", ""), top_k=5)
+        r = search_with_abstain(idx, p["task"], p.get("invented_label", ""),
+                                top_k=5, ranker="bm25f")
         hit = p["label"] in [x for x, _ in r.candidates]
         if r.abstain:
             fired += 1
@@ -298,7 +299,7 @@ def main():
           f"   vs {sum(not h for h in results[names[3]][5])}/{n} without abstain")
 
     # ------------------------------------------------------------------ per-query detail
-    print("\nper-query (+content, top-5); '.' = gold retrieved, X = miss")
+    print("\nper-query (BM25F, label/task split, top-5); '.' = gold retrieved, X = miss")
     print("-" * 92)
     for p in pairs:
         ranked = systems[names[3]](p["task"], p.get("invented_label", ""), 10)

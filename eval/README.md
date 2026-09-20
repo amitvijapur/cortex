@@ -4,6 +4,24 @@ A router that describes its own reasoning is easy to build and easy to fool, bec
 reasoning is generated text. It can stay articulate while the behaviour underneath drifts.
 Everything here exists to make that difference observable.
 
+## Optional Jev adviser pilot
+
+`jev_eval.py` runs a separate adviser experiment. It calls the current CLI hint
+implementation over raw event prefixes rather than reusing the older ranking arms
+below. The default six synthetic cases test report plumbing, abstention and cost
+accounting without credentials. Their fabricated predictions are not quality data.
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 eval/test_jev_adviser.py
+PYTHONDONTWRITEBYTECODE=1 python3 eval/test_jev_eval.py
+PYTHONDONTWRITEBYTECODE=1 python3 eval/jev_eval.py --mode shadow
+```
+
+Live runs are explicit and bounded. Final-route quality requires independently
+reviewed held-out labels plus comparable real baseline, shadow and advisory session
+records. Missing costs remain unknown. See [the complete evaluation contract](../docs/jev-evaluation.md)
+and [pilot setup](../docs/jev-adviser.md). No live benefit has been established.
+
 ## What this does and does not establish
 
 These tests answer **"did something break?"** They do not answer **"was that a good
@@ -81,8 +99,15 @@ property of it.
 python3 eval/route_eval.py --dry-run          # list cases, spend nothing
 python3 eval/route_eval.py                    # full suite, ~$0.50/case
 python3 eval/route_eval.py --kind rule --repeat 3
-python3 eval/route_eval.py --if-changed       # skip when no input hash moved
+python3 eval/route_eval.py --if-changed       # reuse only a matching successful run
 ```
+
+Reuse requires complete successful coverage and matching model, routing documents,
+case specification, harness, CLI, repeat count and execution mode. Failed,
+incomplete and legacy reports are cache misses. `--dry-run` never invokes a model.
+Each real attempt is recorded as incomplete before workers start. Final reports
+are published atomically, and replacing an explicit output file preserves its
+previous bytes in a sibling history directory.
 
 Four case kinds, in ascending order of how much they prove:
 

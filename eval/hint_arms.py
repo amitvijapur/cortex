@@ -41,7 +41,12 @@ LOG_PATH = CLAUDE_DIR / "cortex-log.jsonl"
 # parse_route: a private copy of the tokenizer is free to drift from the shipped one,
 # and then the "current behaviour" arm stops measuring current behaviour.
 _cli = SourceFileLoader("cortex_cli", str(REPO / "bin" / "cortex")).load_module()
-tokens = _cli.tokens
+
+
+def tokens(text):
+    """Treat absent or explicitly null log text as empty, using the CLI tokenizer."""
+    return _cli.tokens(text or "")
+
 
 TOP_N = 5
 MIN_POOL = 3
