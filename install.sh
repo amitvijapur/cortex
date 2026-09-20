@@ -77,6 +77,7 @@ check_destination() {
 check_destination "$BIN_DIR" dir
 check_destination "$SKILLS_DIR" dir
 check_destination "$BIN_DIR/cortex" file
+check_destination "$BIN_DIR/cortex_jev.py" file
 for skill in cortex-log cortex-learn cortex-reroute cortex-init; do
   check_destination "$SKILLS_DIR/$skill" dir
   check_destination "$SKILLS_DIR/$skill/.cortex-installed.sha256" file
@@ -97,7 +98,9 @@ mkdir -p "$BIN_DIR" "$SKILLS_DIR"
 
 # 1. CLI binary
 install -m 0755 "$SCRIPT_DIR/bin/cortex" "$BIN_DIR/cortex"
+install -m 0644 "$SCRIPT_DIR/bin/cortex_jev.py" "$BIN_DIR/cortex_jev.py"
 green "  ✓ bin/cortex          → $BIN_DIR/cortex"
+green "  ✓ bin/cortex_jev.py    → $BIN_DIR/cortex_jev.py (adviser off by default)"
 
 # 2. Skills
 for skill in cortex-log cortex-learn cortex-reroute cortex-init; do

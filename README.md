@@ -22,6 +22,16 @@
 
 Cortex does not replace your workflow systems. It picks between them, attaches a specialist, declares the reasoning before execution, and records the outcome.
 
+An optional **Jev routing adviser** adds task classification and workflow suggestions
+from capabilities available in the current session. It is **off by default**.
+Shadow mode records an experiment without showing its suggestion to the routing
+model; advisory mode shows a validated suggestion for that model to judge. Jev
+does not execute builds, select effort, or override user choices and permissions.
+See [setup and rollback](docs/jev-adviser.md) and the
+[evaluation guide](docs/jev-evaluation.md). [Local pilot results](docs/jev-pilot-results.md)
+cover verification and the remaining live checks. Routing benefit has not yet been
+established with live Jev and reviewed cases.
+
 ---
 
 ## Table of contents
@@ -84,6 +94,7 @@ Verify with `python3 ~/.claude/bin/cortex doctor`.
 | The installer copies | To |
 |---|---|
 | `bin/cortex` | `~/.claude/bin/cortex` |
+| `bin/cortex_jev.py` | `~/.claude/bin/cortex_jev.py` |
 | `skills/cortex-log`, `cortex-learn`, `cortex-reroute`, `cortex-init` | `~/.claude/skills/` |
 | `skills/cortex-delegate` | `~/.codex/skills/`, when a Codex home already exists |
 | `templates/cortex.md` | `~/.claude/cortex.md`, only if you don't already have one |
@@ -243,10 +254,10 @@ Phases activate on data thresholds, not on a calendar. All four are active:
 |---|---|---|
 | **1 · Visibility** | day one | Every route logged with full reasoning. `/cortex-log` replays it. |
 | **2 · Pattern surfacing** | ~20 routes | `cortex learn` finds `(class, system, pattern)` tuples repeating ≥3× and proposes them as shortcuts. |
-| **3 · Similarity bias** | ~40+ routes | `cortex hint` surfaces similar past routes scored by outcome. **Advisory: it informs the call, it does not make it.** |
+| **3 · Historical evidence** | ~40+ routes | `cortex hint` surfaces recent distinct routes in the same class. Outcomes and similarity are context, not ranking weights. **Advisory: it informs the call, it does not make it.** |
 | **4 · Outcome capture** | day one | Correction triggers append an event linking the replacement, leaving the original decision on the record. |
 
-Two rules hold it together. **Approve, don't auto-apply**: the learning layer proposes and you dispose, because a router that rewrites its own rules without asking is one you cannot trust. **Correction beats prediction**: a negative hint score means past attempts at that route failed, which beats any similarity heuristic because it is ground truth you gave it.
+Two rules hold it together. **Approve, don't auto-apply**: the learning layer proposes and you dispose. **Corrections are evidence**: inspect corrected and abandoned outcomes when considering a past route. Neither a successful outcome nor historical agreement proves that a route was optimal.
 
 ---
 
@@ -290,6 +301,11 @@ cortex log-line "OMC > ralplan > Backend Architect @ L3" "refactor auth middlewa
 # What happened last time on something like this?
 cortex hint "refactor the session store" --class build
 cortex hint "..." --min-similarity 0.05 --top 10     # widen the net
+
+# Optional Jev pilot, no network or experiment writes in off mode
+cortex advise "build a small API endpoint" --mode off --json
+# Shadow/advisory require a fresh manifest of this session's capabilities.
+# See docs/jev-adviser.md before enabling either mode.
 
 # Close the loop
 cortex outcome shipped

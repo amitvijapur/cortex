@@ -43,6 +43,13 @@ class InstallerTests(IsolatedTest):
         result = self.install()
         self.assertEqual(result.returncode, 0, result.stderr)
         state = Path(self.env['CLAUDE_DIR'])
+        self.assertEqual((state / 'bin/cortex_jev.py').read_bytes(),
+                         (ROOT / 'bin/cortex_jev.py').read_bytes())
+        adviser = self.run_command(sys.executable, str(state / 'bin/cortex'),
+                                   'advise', 'installation smoke check', '--mode', 'off', '--json')
+        self.assertEqual(adviser.returncode, 0, adviser.stderr)
+        self.assertEqual(json.loads(adviser.stdout)['status'], 'off')
+        self.assertFalse((state / 'experiments').exists())
         (state / 'cortex.md').write_text('custom registry')
         (state / 'cortex-log.jsonl').write_text('custom log\n')
         result = self.install()
@@ -54,7 +61,7 @@ class InstallerTests(IsolatedTest):
         self.assertTrue((codex / 'skills/cortex-delegate/SKILL.md').is_file())
 
     def test_symlink_conflicts_preflight_every_destination(self):
-        targets = ('bin', 'bin/cortex', 'skills', 'skills/cortex-init',
+        targets = ('bin', 'bin/cortex', 'bin/cortex_jev.py', 'skills', 'skills/cortex-init',
                    'skills/cortex-init/SKILL.md', 'cortex.md', 'cortex.md.new',
                    'cortex-log.jsonl', 'codex/skills',
                    'codex/skills/cortex-delegate', 'codex/skills/cortex-delegate/SKILL.md',
@@ -72,7 +79,7 @@ class InstallerTests(IsolatedTest):
                     target.parent.mkdir(parents=True, exist_ok=True)
                     external = case / 'external'
                     if not dangling:
-                        if relative.endswith(('cortex', 'SKILL.md', '.md', '.new', '.jsonl')):
+                        if relative.endswith(('cortex', 'SKILL.md', '.md', '.new', '.jsonl', '.py')):
                             external.write_text('external user content')
                         else:
                             external.mkdir()

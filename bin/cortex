@@ -9,7 +9,8 @@ Subcommands:
   reroute      correct a route by --ref or the current project/session's latest
   outcome      set that route's outcome (shipped / abandoned / partial / corrected)
   history      show a route's full correction chain (what it looked like before)
-  hint         surface similar past routes for a task, weighted by outcome
+  hint         surface recent distinct routes, with similarity and outcomes shown
+  advise       optional Jev classification and workflow advice (off by default)
   audit-tiers  list L3/L4 routes so you can check whether L2 would have sufficed
   doctor       audit cortex setup for drift between docs, skills, and log
   init         discover your existing systems to prepare a personalized registry
@@ -922,9 +923,60 @@ OUTCOME_WEIGHTS = {"shipped": 1.0, "partial": 0.5, "corrected": -1.0, "abandoned
 UNSCORED_WEIGHT = 0.3  # entry logged but never given an outcome
 
 
+def cmd_advise(args):
+    # Import lazily: installing or disabling the adviser cannot affect hint/log.
+    from cortex_jev import advise, public_view, append_experiment, MAX_MANIFEST_BYTES
+    manifest = None
+    manifest_error = None
+    mode = args.mode
+    if mode != "off" and args.manifest:
+        try:
+            with open(args.manifest, "rb") as handle:
+                data = handle.read(MAX_MANIFEST_BYTES + 1)
+            if len(data) > MAX_MANIFEST_BYTES:
+                manifest_error = "manifest_too_large"
+            else:
+                manifest = json.loads(data)
+        except (OSError, ValueError):
+            manifest_error = "manifest_unreadable"
+    # No process-derived identity: this manifest must be bound to the actual host.
+    host_session = next((os.environ[k] for k in (
+        "CORTEX_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID",
+        "CODEX_THREAD_ID") if os.environ.get(k)), None)
+    sid = args.session_id or host_session
+    mismatch = args.session_id and host_session and args.session_id != host_session
+    record = advise(args.task, None if mismatch else manifest, mode=mode,
+                    session_id=sid, explicit_candidate=args.explicit_candidate,
+                    model=args.model, threshold=args.threshold, timeout=args.timeout)
+    if mode != "off" and (manifest_error or mismatch):
+        record["fallback_reason"] = "session_mismatch" if mismatch else manifest_error
+    if mode != "off":
+        try:
+            append_experiment(CLAUDE_DIR, record)
+        except (OSError, ValueError):
+            record.update(status="fallback", fallback_reason="experiment_log_failed",
+                          classification=None, candidate_id=None, candidate=None,
+                          fallback_required=True)
+    view = public_view(record)
+    if args.json:
+        print(json.dumps(view, sort_keys=True, allow_nan=False))
+    elif mode == "shadow":
+        print("Jev shadow experiment finished; continue current Cortex routing.")
+    elif record["status"] == "suggested":
+        candidate = record["candidate"]
+        route = f"{candidate['system']} > {candidate['pattern']}"
+        if candidate.get("agent"):
+            route += f" > {candidate['agent']}"
+        print(f"Jev advisory: {record['classification']} | {route}")
+        print("Session model decides; existing effort, policy and permission checks still apply.")
+    else:
+        print(f"Jev {record['status']}: {record['fallback_reason']}; continue current Cortex routing.")
+    return 0
+
+
 def cmd_hint(args):
-    """Phase 3 (advisory mode): given a task description, surface recent past routes
-    weighted by outcome. Does NOT decide — returns evidence to factor into the route.
+    """Phase 3: given a task description, surface recent distinct past routes.
+    Does NOT decide — returns evidence to factor into the route.
 
     Ranking is by recency within the filtered pool, not by similarity to the task text.
     That is a measured choice, not a simplification. Replayed chronologically over the
@@ -1969,6 +2021,19 @@ def build_parser():
                     choices=["build", "review", "plan", "research", "debug", "design", "quickfix"],
                     help="filter past routes to a matching task class")
     hn.set_defaults(func=cmd_hint)
+
+    ja = sub.add_parser("advise", help="optional Jev adviser; does not dispatch workflows")
+    ja.add_argument("task", help="minimal task description (sent only when enabled)")
+    ja.add_argument("--mode", choices=["off", "shadow", "advisory"],
+                    default=os.environ.get("CORTEX_JEV_MODE", "off"))
+    ja.add_argument("--manifest", help="fresh current-session capability manifest JSON")
+    ja.add_argument("--session-id", help="host session identity, bound to the manifest")
+    ja.add_argument("--explicit-candidate", help="user-selected candidate ID; bypasses Jev")
+    ja.add_argument("--model", default="jev-1.13.0", help="pinned Jev model")
+    ja.add_argument("--threshold", type=float, default=0.8)
+    ja.add_argument("--timeout", type=float, default=2.0, help="total request deadline, 0.05 to 10 seconds")
+    ja.add_argument("--json", action="store_true", help="machine-readable public output; shadow advice is hidden")
+    ja.set_defaults(func=cmd_advise)
 
     at = sub.add_parser("audit-tiers", help="audit L3/L4 routes — check whether L2 would have sufficed")
     at.add_argument("--tier", action="append", choices=["L1", "L2", "L3", "L4"],

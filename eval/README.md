@@ -4,6 +4,24 @@ A router that describes its own reasoning is easy to build and easy to fool, bec
 reasoning is generated text. It can stay articulate while the behaviour underneath drifts.
 Everything here exists to make that difference observable.
 
+## Optional Jev adviser pilot
+
+`jev_eval.py` runs a separate adviser experiment. It calls the current CLI hint
+implementation over raw event prefixes rather than reusing the older ranking arms
+below. The default six synthetic cases test report plumbing, abstention and cost
+accounting without credentials. Their fabricated predictions are not quality data.
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 eval/test_jev_adviser.py
+PYTHONDONTWRITEBYTECODE=1 python3 eval/test_jev_eval.py
+PYTHONDONTWRITEBYTECODE=1 python3 eval/jev_eval.py --mode shadow
+```
+
+Live runs are explicit and bounded. Final-route quality requires independently
+reviewed held-out labels plus comparable real baseline, shadow and advisory session
+records. Missing costs remain unknown. See [the complete evaluation contract](../docs/jev-evaluation.md)
+and [pilot setup](../docs/jev-adviser.md). No live benefit has been established.
+
 ## What this does and does not establish
 
 These tests answer **"did something break?"** They do not answer **"was that a good

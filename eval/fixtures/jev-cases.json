@@ -1,0 +1,36 @@
+{
+  "provenance": "Synthetic authored examples, unreviewed. No personal route-log data.",
+  "capabilities": ["tool:exec", "agent:worker", "tool:web"],
+  "candidates": [
+    {"id": "direct", "system": "Direct", "pattern": "edits", "requires": ["tool:exec"], "description": "Small bounded task handled directly"},
+    {"id": "team", "system": "OMC", "pattern": "team", "requires": ["agent:worker"], "description": "Independent implementation and review lanes"},
+    {"id": "research", "system": "Direct", "pattern": "research", "requires": ["tool:web"], "description": "Research and compare evidence before a decision"}
+  ],
+  "history": [
+    {"event_id": "synthetic-1", "class": "quickfix", "system": "Direct", "pattern": "fix", "tier": "L1", "task": "Correct a synthetic typo"},
+    {"event_id": "synthetic-2", "class": "build", "system": "OMC", "pattern": "team", "tier": "L3", "task": "Build a synthetic scheduler"},
+    {"event": "outcome", "ref": "synthetic-1", "outcome": "shipped"},
+    {"event_id": "synthetic-3", "class": "research", "system": "Direct", "pattern": "research", "tier": "L2", "task": "Compare synthetic options"},
+    {"event": "reclassify", "ref": "synthetic-1", "tier": "L2"}
+  ],
+  "cases": [
+    {"id": "typo", "group": "small-fix", "split": "tune", "task": "Fix a spelling error in one help message.", "query_class": "quickfix", "history_prefix": 2,
+     "labels": {"reviewed": false, "provenance": "synthetic authored, unreviewed", "acceptable_candidates": ["direct"], "acceptable_classes": ["quickfix"]},
+     "fixture": {"status": "suggested", "classification": "quickfix", "candidate_id": "direct", "confidence": {"classification": 0.95, "workflow": 0.9}, "cost_usd": 0.0001, "latency_ms": 5}},
+    {"id": "parallel-build", "group": "parallel-build", "split": "tune", "task": "Add a scheduler with independently testable storage and notification components.", "query_class": "build", "history_prefix": 3,
+     "labels": {"reviewed": false, "provenance": "synthetic authored, unreviewed", "acceptable_candidates": ["team"], "acceptable_classes": ["build"]},
+     "fixture": {"status": "suggested", "classification": "build", "candidate_id": "team", "cost_usd": 0.0001, "latency_ms": 7}},
+    {"id": "ambiguous", "group": "ambiguous", "split": "heldout", "task": "Make the thing better.", "query_class": null, "history_prefix": 4,
+     "labels": {"reviewed": false, "provenance": "synthetic authored, unreviewed", "acceptable_candidates": ["abstain"], "acceptable_classes": ["abstain"]},
+     "fixture": {"status": "fallback", "fallback_reason": "uncertain", "cost_usd": 0.0001, "latency_ms": 4}},
+    {"id": "comparison", "group": "evidence", "split": "heldout", "task": "Compare two queue designs using their documented failure semantics.", "query_class": "research", "history_prefix": 4,
+     "labels": {"reviewed": false, "provenance": "synthetic authored, unreviewed", "acceptable_candidates": ["research", "direct"], "acceptable_classes": ["research"]},
+     "fixture": {"status": "suggested", "classification": "research", "candidate_id": "research", "cost_usd": 0.0001, "latency_ms": 6}},
+    {"id": "timeout", "group": "failure", "split": "heldout", "task": "Repair an isolated parser failure.", "query_class": "debug", "history_prefix": 5,
+     "labels": {"reviewed": false, "provenance": "synthetic authored, unreviewed", "acceptable_candidates": ["direct"], "acceptable_classes": ["debug"]},
+     "fixture": {"status": "fallback", "fallback_reason": "timeout", "cost_usd": null, "latency_ms": 20}},
+    {"id": "explicit", "group": "explicit", "split": "heldout", "task": "Use the available team workflow for this implementation.", "explicit_candidate": "team", "query_class": "build", "history_prefix": 5,
+     "labels": {"reviewed": false, "provenance": "synthetic authored, unreviewed", "acceptable_candidates": ["team"], "acceptable_classes": ["build"]},
+     "fixture": {"status": "explicit", "candidate_id": "team", "request_count": 0, "cost_usd": 0, "latency_ms": 0}}
+  ]
+}
