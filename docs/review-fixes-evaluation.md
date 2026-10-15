@@ -36,11 +36,9 @@ route anywhere in the prior pool. These are historical agreement scores on a
 growing log, not held-out route-quality labels or a new preregistered experiment.
 No graph rollout is supported. Local embeddings were not rerun in this repair.
 
-The existing private Jev pilot gives no advantage on its six easy cases: baseline,
-shadow and advisory each match all six accepted labels. Costs for session models
-are unknown, and the baseline used unfiltered hints. See
-[the pilot limitations](jev-pilot-results.md). No paid calls were made for this
-repair, and its historical freeze was preserved.
+Jev pilot follow-ups are outside this repair's publication scope. No new paid
+calls were made, no historical freeze was changed, and this repair establishes
+no routing-quality or cost advantage for an adviser.
 
 Evidence coverage remains a separate bottleneck. The log contains no explicit
 host field for these historical routes, so recorded hosts correctly remain

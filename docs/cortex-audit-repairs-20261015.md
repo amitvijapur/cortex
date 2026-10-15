@@ -14,9 +14,9 @@ snapshot is performed before push, without paid models or service changes.
 
 Amit approved fixing the preceding read-only audit findings. Native workers
 owned independent evaluation, installer/Doctor and delegation patches. The parent
-handled personal activation, opt-in evidence, integration and documentation.
-Existing dirty work was preserved. No push, merge, paid model evaluation, Devin
-activation, service change or intake resumption was authorized or performed.
+handled activation, opt-in evidence, integration and documentation.
+Existing dirty work was preserved. The implementation used no paid model
+evaluation, service changes or intake resumption.
 
 ## Changes
 
@@ -34,23 +34,15 @@ activation, service change or intake resumption was authorized or performed.
 - Added an opt-in, self-reported skill evidence stream, separate from routes and
   outcomes. Canonical path/hash, stage, route and session metadata do not prove
   application quality. No automatic capture, hooks or historical backfill.
-- Corrected Codex's saved Obsidian environment pointer. Existing sessions need a
-  refreshed environment; verification uses the corrected explicit value.
-- Corrected stale Hyperframes registry metadata to the already installed 0.8.149.
-  Its release-tag Bun metadata discrepancy is not a local runtime repair.
 
-## Personal activation and recovery
+## Activation and recovery
 
-Backups are under `~/.claude/cortex-audit-backup-20261015-WL0N8K/`, including the
-selected skill copies, personal Cortex guidance, extended registry and Codex
-configuration. The directory is private. Do not publish its configuration backup.
-Only narrow personal guidance/configuration patches and selected skill repairs
-were applied. No blanket installer run or replacement of personalized learning
-instructions was used. Source-identical repaired skills have installation hashes.
-
-The source CLI is already reached through the existing personal executable link.
-The evidence helper resolves beside that source executable. Fresh installations
-package the helper with the CLI.
+Personal activation records and backups remain local, outside the repository.
+Preserve customized installations and merge selectively rather than running a
+blanket installer to silence drift warnings. Source-identical repaired skills
+have installation hashes. Fresh installations package the evidence helper with
+the CLI. Repository changes can be rolled back by reverting the repair commit;
+personal activation requires its separate local recovery records.
 
 ## Verification and remaining limits
 
@@ -84,23 +76,3 @@ Five warnings describe preserved personal learning/reroute wording variants;
 three describe missing exact system labels, explicitly unknown usage rather than
 non-use. Do not delete variants or invent usage to obtain a green summary.
 
-## Devin side investigation
-
-The exact X post could not be verified, so no assertion is made about its content
-or product. Official Devin documentation was checked on 15 October 2026:
-
-- https://docs.devin.ai/essential-guidelines/when-to-use-devin
-- https://docs.devin.ai/admin/billing/chatgpt
-- https://devin.ai/pricing
-- https://docs.devin.ai/product-guides/security-profiles
-
-Recommendation: a bounded trial for unattended cloud tasks, not a default router
-or replacement for native Codex delegation. Compare three small tasks with frozen
-acceptance tests, record accepted results, review effort and actual spend. Use
-only a disposable repository, minimal permissions and no production credentials;
-do not enable automatic merge. No trial was activated here.
-
-Devin Pro is currently advertised at USD20/month. ChatGPT-plan sharing requires
-an eligible paid Devin plan, covers eligible GPT usage rather than every model,
-and can fall back to Devin quota/on-demand billing when ChatGPT usage is depleted.
-It is not a free harness simply because a ChatGPT subscription is already held.
