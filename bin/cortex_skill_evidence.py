@@ -50,6 +50,10 @@ def record(cli, args):
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
             raise ValueError('evidence destination must be a singly linked regular file')
         fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+        # The routing log may be a symlink to this otherwise regular file.
+        route_metadata = cli.LOG_PATH.stat()
+        if (metadata.st_dev, metadata.st_ino) == (route_metadata.st_dev, route_metadata.st_ino):
+            raise ValueError('evidence destination must not alias the routing log')
         stream.write(json.dumps(evidence) + '\n')
     print(f"recorded self-reported skill {args.stage} for {route['_id']}")
     return 0

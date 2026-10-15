@@ -145,18 +145,23 @@ echo
 green "Done."
 echo
 bold "Next steps"
+# Printed commands must work even after a one-shot installer override, and when
+# the selected state directory contains spaces or shell metacharacters.
+printf -v cortex_command 'CORTEX_HOME=%q python3 %q' "$CLAUDE_DIR" "$BIN_DIR/cortex"
 dim   "  1. Add @cortex.md to your CLAUDE.md so it loads globally:"
-echo  "       echo '@cortex.md' >> $CLAUDE_DIR/CLAUDE.md"
+printf "       echo '@cortex.md' >> %q\n" "$CLAUDE_DIR/CLAUDE.md"
 echo
 dim   "  2. Build your registry automatically from what you already run:"
 echo  "       run  /cortex-init   in your agent"
-echo  "       (or  python3 $BIN_DIR/cortex init   to just see the scan)"
+echo  "       (or  $cortex_command init   to just see the scan)"
+dim   "     Keep the selected state root exported in the agent's environment:"
+printf '       export CORTEX_HOME=%q\n' "$CLAUDE_DIR"
 dim   "     It discovers your agents, skills, MCPs and CLIs and writes them into"
 dim   "     the Workflow Registry — never overwriting your setup without a backup."
 echo
 dim   "  3. (Optional) Wire the SessionStart hook for weekly self-audits — see the README."
 echo
 dim   "  4. Try it:"
-echo  "       python3 $BIN_DIR/cortex doctor"
-echo  "       python3 $BIN_DIR/cortex --help"
+echo  "       $cortex_command doctor"
+echo  "       $cortex_command --help"
 echo

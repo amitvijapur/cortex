@@ -475,7 +475,6 @@ def load_evidence_sessions(projects_dir, codex_dir=None):
 # ---------------------------------------------------------------------------
 LOG_LINE_RE = re.compile(r"cortex\s+log-line\s+")
 LOG_RE = re.compile(r"cortex\s+log\s+")
-OUTCOME_RE = re.compile(r"cortex\s+outcome\s+(shipped|abandoned|partial|corrected)\b")
 
 
 def anchor_tasks(command):
@@ -524,6 +523,13 @@ def cortex_commands(command):
 
 def successful_command(event):
     return event.tool == 'Bash' and event.completed_at is not None
+
+
+def outcome_commands(command):
+    """Actual outcome invocations, never outcome-shaped text in quoted arguments."""
+    return [invocation for invocation in cortex_commands(command)
+            if (args := split_args(invocation))[:2] == ['cortex', 'outcome']
+            and len(args) >= 3 and args[2] in ('shipped', 'abandoned', 'partial', 'corrected')]
 
 
 def split_args(text):
@@ -880,8 +886,8 @@ def signal_label_provenance(row, sessions, attribution):
         DECLARATION_WINDOW of this route's own declaration. A verdict rendered a minute
         after the route was declared did not observe how the route went.
 
-    These are the highest-precision findings in the file: a string either is or is not
-    present in a preserved shell command. They are also the narrowest — they say nothing
+    These findings require a parsed outcome invocation in a successful shell command,
+    not a quoted mention. They are also the narrowest — they say nothing
     about whether the route was good, only that its recorded label was not an
     observation. Caveat: `cortex outcome` scopes to the current project, so in the rare
     session that routes across two repos the pairing can slip by one route.
@@ -899,20 +905,19 @@ def signal_label_provenance(row, sessions, attribution):
         if not successful_command(event):
             continue
         declares = bool(anchor_tasks(event.cmd))
-        closes = next((OUTCOME_RE.search(command) for command in cortex_commands(event.cmd)
-                       if OUTCOME_RE.search(command)), None)
+        closes = next(iter(outcome_commands(event.cmd)), None)
         if event.ts > start and declares:
-            anchors_after.append((event.ts, event.cmd, closes))
+            anchors_after.append((event.ts, closes))
         if closes and not declares and start <= event.ts <= (end or event.ts):
             if event.ts - start <= DECLARATION_WINDOW:
                 gap = int((event.ts - start).total_seconds())
                 out.append(finding("outcome_stamped_at_declaration", "high",
-                                   excerpt(event.cmd, closes),
+                                   excerpt(closes, None),
                                    f"verdict and route declaration are {gap}s apart, so "
                                    f"they are one ceremony rather than a declaration and "
                                    f"a later observation", event.ts))
     if anchors_after:
-        next_ts, next_cmd, next_closes = min(anchors_after, key=lambda a: a[0])
+        next_ts, next_closes = min(anchors_after, key=lambda a: a[0])
         if next_closes:
             # `cortex outcome` closes the most recent still-open route for the current
             # project, which at this boundary is normally this one. When this row carries
@@ -922,7 +927,7 @@ def signal_label_provenance(row, sessions, attribution):
             out.append(finding(
                 "outcome_batched_with_next_route",
                 "high" if paired else "medium",
-                excerpt(next_cmd, next_closes),
+                excerpt(next_closes, None),
                 ("this route's verdict was stamped inside the shell command that declared "
                  "the following route" if paired else
                  "a verdict was stamped inside the command that declared the following "
@@ -1133,6 +1138,8 @@ def orphan_evidence(sessions, anchor_times, records):
     out = []
     for session_id, anchors in anchor_times.items():
         if session_id not in sessions:
+            continue
+        if sessions[session_id].get('evidence_scope') == 'commands-only':
             continue
         events = sessions[session_id]["events"]
         windows = claimed.get(session_id, [])

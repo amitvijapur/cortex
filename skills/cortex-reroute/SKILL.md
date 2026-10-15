@@ -19,8 +19,13 @@ Flag the most recent route in the current project and agent session as `outcome=
 
 ### Step 1 — Mark the last entry as corrected
 
+Resolve the state directory from `CORTEX_HOME`, then `CLAUDE_DIR`, then
+`$HOME/.claude`, matching the CLI and installer. Keep a custom override exported
+in the agent's environment.
+
 ```bash
-python3 ~/.claude/bin/cortex reroute --to "<the route the user wanted>"
+cortex_state_dir="${CORTEX_HOME:-${CLAUDE_DIR:-$HOME/.claude}}"
+python3 "$cortex_state_dir/bin/cortex" reroute --to "<the route the user wanted>"
 ```
 
 The CLI:
@@ -37,7 +42,8 @@ route or infer a target from an ambiguous legacy ID.
 If the user wants the corrected route to actually run now, log it as a fresh entry with `--redirect-from` so the two are linked:
 
 ```bash
-python3 ~/.claude/bin/cortex log \
+cortex_state_dir="${CORTEX_HOME:-${CLAUDE_DIR:-$HOME/.claude}}"
+python3 "$cortex_state_dir/bin/cortex" log \
   --task "<same task as before>" \
   --class <class> \
   --system <new system> \

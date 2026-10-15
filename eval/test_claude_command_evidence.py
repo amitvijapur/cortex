@@ -95,6 +95,88 @@ class ClaudeCommandEvidence(unittest.TestCase):
         sessions['fixture']['events'][0].completed_at = D.parse_ts('2026-10-01T10:02:00Z')
         self.assertFalse(self.hint(sessions)['ran'])
 
+    def test_parallel_hint_with_shared_timestamp_cannot_inform_route(self):
+        stamp = '2026-10-01T10:01:00Z'
+        for completed in (stamp, '2026-10-01T10:02:00Z'):
+            with self.subTest(completed=completed):
+                rows = [{'type': 'assistant', 'sessionId': 'fixture', 'uuid': 'parallel',
+                    'timestamp': stamp, 'message': {'content': [
+                        {'type': 'tool_use', 'id': ident, 'name': 'Bash',
+                         'input': {'command': cmd}} for ident, cmd in (('hint', HINT), ('log', LOG))]}}]
+                for ident, end in (('log', stamp), ('hint', completed)):
+                    rows.append({'type': 'user', 'sessionId': 'fixture', 'uuid': ident,
+                        'timestamp': end, 'toolUseResult': {'exitCode': 0},
+                        'message': {'content': [{'type': 'tool_result', 'tool_use_id': ident,
+                            'is_error': False, 'content': 'ok'}]}})
+                path = self.root / 'parallel.jsonl'
+                path.write_text('\n'.join(map(json.dumps, rows)))
+                sessions = {'fixture': {'host': 'claude', 'events': list(D.read_transcript(path))}}
+                check = self.hint(sessions)
+                self.assertFalse(check['ran'])
+                self.assertFalse(check['could_inform'])
+                self.assertFalse(check['earlier_in_session'])
+
+    def test_same_shell_hint_ran_but_cannot_inform_its_declaration(self):
+        for completed in ('2026-10-01T10:01:00Z', '2026-10-01T10:02:00Z'):
+            with self.subTest(completed=completed):
+                sessions = self.session(f'{HINT} && {LOG}')
+                event = sessions['fixture']['events'][0]
+                event.ts = D.parse_ts('2026-10-01T10:01:00Z')
+                event.completed_at = D.parse_ts(completed)
+                sessions['fixture']['events'] = [event]
+                check = self.hint(sessions)
+                self.assertTrue(check['ran'])
+                self.assertFalse(check['could_inform'])
+                self.assertEqual(check['query_matched'], 'exact')
+
+    def test_hint_completing_at_declaration_is_not_earlier_evidence(self):
+        sessions = self.session(HINT)
+        sessions['fixture']['events'][0].completed_at = D.parse_ts('2026-10-01T10:01:00Z')
+        check = self.hint(sessions)
+        self.assertFalse(check['ran'])
+        self.assertFalse(check['could_inform'])
+
+    def test_parallel_chain_declaring_another_route_does_not_count(self):
+        sessions = self.session(f"{HINT} && cortex log --task other")
+        event = sessions['fixture']['events'][0]
+        event.ts = D.parse_ts('2026-10-01T10:01:00Z')
+        event.completed_at = D.parse_ts('2026-10-01T10:02:00Z')
+        check = self.hint(sessions)
+        self.assertFalse(check['ran'])
+        self.assertFalse(check['could_inform'])
+
+    def test_outcome_checks_parse_the_verb_not_quoted_arguments(self):
+        attribution = {'method': 'anchor-command', 'session': 'fixture',
+                       'start': D.parse_ts('2026-10-01T09:59:30Z'),
+                       'end': D.parse_ts('2026-10-01T10:01:00Z')}
+        for verdict in ('shipped', 'partial', 'abandoned', 'corrected'):
+            for batched in (False, True):
+                for actual in (False, True):
+                    with self.subTest(verdict=verdict, batched=batched, actual=actual):
+                        cmd = (f'cortex outcome {verdict}' if actual else
+                               f'cortex hint "document cortex outcome {verdict}" --class research')
+                        if batched:
+                            cmd += f' && {LOG}'
+                        sessions = self.session(cmd)
+                        findings = D.signal_label_provenance({'outcome': verdict}, sessions, attribution)
+                        self.assertEqual(bool(findings), actual)
+                        self.assertEqual(S.outcome_command_lag(sessions, attribution),
+                                         0.5 if actual else None)
+                        provenance, _ = S.outcome_provenance({'outcome': verdict}, sessions, attribution)
+                        self.assertEqual(provenance, 'ceremony' if actual else 'observation')
+                        if actual:
+                            self.assertEqual(findings[0]['signal'], 'outcome_batched_with_next_route'
+                                             if batched else 'outcome_stamped_at_declaration')
+                            self.assertIn(f'cortex outcome {verdict}', findings[0]['evidence'])
+
+    def test_full_transcript_orphan_revert_is_still_reported(self):
+        sessions = self.session('git revert deadbeef')
+        _, times = D.build_anchor_index(sessions)
+        findings = D.orphan_evidence(sessions, times, [])
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]['signal'], 'work_reverted')
+        self.assertEqual(findings[0]['confidence'], 'high')
+
     def test_unattributed_outcomes_are_unknown_not_absent(self):
         for attribution in ({'method': 'none'}, {'method': 'session_ref'}, {'method': 'ambiguous'}):
             self.assertEqual(S.outcome_provenance({'outcome': 'shipped'}, {}, attribution)[0], 'unknown')

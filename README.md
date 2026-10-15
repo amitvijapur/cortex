@@ -167,6 +167,12 @@ Nothing here is Claude-specific. The framework is one Markdown file and the CLI 
 export CORTEX_HOME="$HOME/.cortex"
 ```
 
+Export the same root when running `./install.sh` and in the agent environment
+that invokes the installed skills. Skill commands resolve `CORTEX_HOME`, then
+`CLAUDE_DIR`, then `$HOME/.claude`, with quoted paths for directories containing
+spaces. A one-shot installer override does not persist the agent's environment;
+the installer prints the required export and directly runnable check commands.
+
 Then load `cortex.md` into whatever your agent reads:
 
 | Agent | Where the framework goes |

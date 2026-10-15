@@ -92,6 +92,35 @@ class SkillEvidenceTests(unittest.TestCase):
         self.record(ok=False)
         self.assertEqual(self.log.read_bytes(), self.before)
 
+    def test_reverse_symlink_cannot_append_evidence_to_route_log(self):
+        evidence = self.state / 'cortex-skill-evidence.jsonl'
+        self.log.rename(evidence)
+        self.log.symlink_to(evidence)
+        self.assertFalse(evidence.is_symlink())
+        self.assertEqual(evidence.stat().st_nlink, 1)
+
+        result = self.record(ok=False)
+
+        self.assertIn('evidence destination must not alias the routing log',
+                      result.stderr)
+        self.assertEqual(self.log.read_bytes(), self.before)
+        self.assertEqual(evidence.read_bytes(), self.before)
+
+    def test_separate_symlinked_route_log_allows_evidence(self):
+        route_target = self.state / 'routes.jsonl'
+        self.log.rename(route_target)
+        self.log.symlink_to(route_target)
+
+        for stage in ('read', 'applied'):
+            self.record(stage)
+
+        evidence = self.state / 'cortex-skill-evidence.jsonl'
+        rows = [json.loads(line) for line in evidence.read_text().splitlines()]
+        self.assertEqual([row['stage'] for row in rows], ['read', 'applied'])
+        self.assertTrue(all(row['ref'] == self.route['event_id'] for row in rows))
+        self.assertEqual(self.log.read_bytes(), self.before)
+        self.assertEqual(route_target.read_bytes(), self.before)
+
 
 if __name__ == '__main__':
     unittest.main()

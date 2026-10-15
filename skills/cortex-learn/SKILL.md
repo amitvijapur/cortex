@@ -6,7 +6,7 @@ trigger: /cortex-learn
 
 # /cortex-learn
 
-Run pattern detection on `~/.claude/cortex-log.jsonl`. Surface groups of routing decisions that repeated ≥3 times as candidate Decision Shortcuts for cortex.md.
+Run pattern detection on the active state's `cortex-log.jsonl`. Surface groups of routing decisions that repeated ≥3 times as candidate Decision Shortcuts for cortex.md.
 
 ## When to invoke
 
@@ -20,8 +20,13 @@ Run pattern detection on `~/.claude/cortex-log.jsonl`. Surface groups of routing
 
 ### Step 1 — Run pattern detection
 
+Resolve the state directory from `CORTEX_HOME`, then `CLAUDE_DIR`, then
+`$HOME/.claude`, matching the CLI and installer. Keep a custom override exported
+in the agent's environment. Use that directory's `cortex.md` for registry edits.
+
 ```bash
-python3 ~/.claude/bin/cortex learn
+cortex_state_dir="${CORTEX_HOME:-${CLAUDE_DIR:-$HOME/.claude}}"
+python3 "$cortex_state_dir/bin/cortex" learn
 ```
 
 Optional:
