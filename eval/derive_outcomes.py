@@ -1,106 +1,24 @@
 #!/usr/bin/env python3
-"""derive_outcomes — passive, evidence-derived signals for logged Cortex routes.
+"""derive_outcomes — passive failure evidence for logged Cortex routes.
 
-WHAT THIS MEASURES
-    Evidence of *failure* around a route, recovered from artifacts that already exist:
-    session transcripts under ~/.claude/projects and git history in the repo the route
-    ran in. Every signal it emits points at a quotable piece of evidence — a user
-    utterance, a shell command, a commit — that a human can go read.
+Claude transcripts and opt-in, owner-verified Codex command records are supported.
+Codex command attribution does not enable outcome, user-turn or effort grading.
+Unsupported evidence stays unknown, never inferred from model or workflow names.
 
-WHAT IT DOES NOT MEASURE
-    Success. There is no positive class and there never will be one. The variable this
-    replaces defined `shipped` as "the user did not push back", which manufactured a
-    positive label out of silence; the whole point of deriving rather than self-reporting
-    is to stop doing that. A route with no failure evidence is `unknown`, not good.
+Joins use exact session_ref or parsed route-creating commands, never project names,
+hour buckets, lexical similarity or nearest-session guesses. Explicit session
+references constrain anchor matching. Ambiguous anchors remain unattributed.
+Anchor windows end at the next anchor or session end, shortened by inactivity
+gaps. Session-ref-only joins retain the existing whole-session uncertainty.
 
-    Routing quality. Every signal here is a property of the *session*, confounded by task
-    difficulty. A long session with two rework loops may be a correct L4 route working as
-    designed. These signals are a triage frame — a way to pick the handful of routes per
-    month that deserve a human read — not a verdict.
+Reports include dynamic UTC date bounds and coverage by recorded host and month.
+Missing host/date metadata remains unknown. A joined transcript's host is separate
+from the recorded route host. Coverage describes retained, readable evidence only,
+not complete host activity. Unknown means neither success nor failure.
 
-PRECISION OVER RECALL
-    This is the explicit optimisation target, and it is the reason several tempting
-    signals are absent. A false "this route failed" is worse than a missed one: the
-    failure mode being corrected is the manufacture of confident labels, and manufacturing
-    confident *negative* labels is the same bug wearing a different hat. Concretely:
-
-      - The dissatisfaction lexicon is deliberately narrow. It only matches user-typed
-        turns, plain-text only, under a length cap, after tool results and pasted
-        material are excluded. A loose scan over all user content flags ~60% of sessions
-        and is nearly all false positives (measured in the design note, §0.3).
-      - Signals that cannot be disambiguated from ordinary work are downgraded, not
-        dropped, and carry `confidence: low` so they can be filtered out entirely.
-      - Anything that cannot be attributed to a route with direct evidence is reported
-        as `unattributed`. It is never guessed at.
-
-    Recall is consequently poor and unmeasured. Routes with no signal are the large
-    majority and mean nothing.
-
-HOW A ROUTE IS JOINED TO A TRANSCRIPT
-    Two mechanisms, in preference order. Neither is the `session_id` field, which is a
-    UTC hour bucket: 81 of the 141 historical rows share a bucket with another row and
-    18 buckets span more than one project, so it cannot identify anything.
-
-    1. `session_ref` (exact). bin/cortex now records the host session id, which is the
-       name the transcript is filed under. This is the intended path. As of this writing
-       *no historical row carries it* — it was added after all 141 rows were written —
-       so in practice today it contributes nothing and the code path is untested against
-       real data. It is implemented so that new rows join for free.
-
-    2. Anchor-command match (evidence). The row was written by a `cortex log-line` /
-       `cortex log` shell command, and that command is preserved verbatim in the
-       transcript as a Bash tool_use. Parsing the task string out of the command and
-       hashing it with bin/cortex's own `task_hash` recovers the exact row. This is not
-       a heuristic: the matched command is the row's own act of creation. It also yields
-       an anchor *timestamp*, which is what makes per-route (rather than per-session)
-       windows possible in sessions that declared several routes.
-
-    A match is only accepted when it is unique, or when the anchor timestamp agrees with
-    the row's own `ts` to within ANCHOR_TS_TOLERANCE. Ambiguous matches are discarded
-    rather than resolved by preference. Rows that match neither way are emitted with
-    `attribution: none` and no signals at all.
-
-WINDOW
-    From the anchor command to the next route anchor in the same session, or to the last
-    event in the session when it is the final route, cut short at the first inactivity gap
-    over WINDOW_MAX_GAP. Evidence outside that window is not attributed to the route.
-    Sessions reached only via `session_ref` with no anchor command get the whole session,
-    flagged `window_kind: session`.
-
-WHAT IT FOUND, 2026-08-05, over 141 rows and 181 transcript sessions
-    Attribution: 80 rows (57%) joined by anchor command, 7 ambiguous, 54 unjoinable.
-    Zero rows joined by `session_ref` because no row carries one yet.
-
-    Route-level findings, with precision hand-checked against the transcripts:
-
-      outcome_batched_with_next_route   10 routes   10/10 correct
-      outcome_stamped_at_declaration     5 routes    5/5 correct
-      delivery_gap_reported              4 routes    5/5 correct
-      rework_loop                       10 routes   mechanically true, no shown meaning
-      user_interrupt                    14 routes   mechanically true, no shown meaning
-      declared_no_work                   1 route     0/1 correct
-      user_dissatisfaction               0 routes
-
-    `derived_state` is `unknown` for all 141 rows. Not one route carries high-confidence
-    failure evidence inside its own window.
-
-    The two unambiguous dissatisfaction utterances in the corpus — the ones the design
-    note found — are both real and both land *outside* every attributable window: one
-    2h44m after the last route of its session, one a day before its session's first
-    route. They are emitted as `orphan_evidence`, unattached. This is the headline result
-    and it is a negative one: the signal with the most meaning is the one this join cannot
-    reach.
-
-    The label-provenance signals are the only ones that both fire and mean something
-    today. 15 of 80 attributed routes (19%) have direct evidence that their recorded
-    `outcome` was ceremony rather than observation, which reproduces the design note's
-    §0.2 finding from a different direction.
-
-READ-ONLY
-    Reads the cortex log, the transcripts, and `git log` / `git show` in the repos routes
-    ran in. Writes exactly one file, under the state dir, keyed by task_hash and
-    session so it can be joined back to routes later. It never writes to the cortex log
-    and never touches a transcript.
+Signals optimise precision over recall; they are triage evidence, not routing
+quality or positive outcome labels. The module reads logs, transcripts and optional
+git history. It writes only the requested output report unless --dry-run is used.
 """
 import argparse
 import hashlib
@@ -112,6 +30,7 @@ import subprocess
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
+from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -155,6 +74,24 @@ DECLARATION_WINDOW = timedelta(seconds=90)
 # then neither number can be trusted. score_adherence.py imports it.
 def is_route(row):
     return row.get("event") in (None, "route")
+
+
+def load_route_log(path):
+    """Use the CLI's correction folding for both reports, preserving execution IDs.
+
+    Failure to load or collapse is an error, never a fallback to stale raw outcomes.
+    This imports the CLI but does not run it or write to the log.
+    """
+    raw = []
+    for line in path.read_text().splitlines():
+        if line.strip():
+            try:
+                raw.append(json.loads(line))
+            except ValueError:
+                continue
+    cli = SourceFileLoader("cortex_cli", str(REPO / "bin" / "cortex")).load_module()
+    return ([row for row in cli.collapse(raw) if is_route(row)],
+            sum(not is_route(row) for row in raw))
 
 
 # ---------------------------------------------------------------------------
@@ -284,15 +221,99 @@ def iso(dt):
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ") if dt else None
 
 
+def route_host(row):
+    """Only an explicit host field establishes the recorded host.
+
+    Workflow system, model name, project, dates and process-derived session references
+    do not establish a host. Older logs without this field remain unknown.
+    """
+    host = row.get("host")
+    return host.strip().lower() if isinstance(host, str) and host.strip() else "unknown"
+
+
+def date_coverage(values):
+    stamps = [parse_ts(value) for value in values]
+    known = [stamp for stamp in stamps if stamp is not None]
+    return {"start": iso(min(known)) if known else None,
+            "end": iso(max(known)) if known else None,
+            "unknown_timestamps": len(stamps) - len(known)}
+
+
+EVIDENCE_LIMITATION = (
+    "Claude transcripts and optionally owner-verified Codex command records are scanned. "
+    "Codex support is commands-only, not complete transcript, outcome or adherence grading. "
+    "Unsupported hosts and schemas remain unknown, not absent. Recorded hosts missing "
+    "from the log remain unknown even when evidence is joined. No host is inferred "
+    "from workflow or model names. Legacy process references are not thread IDs. "
+    "Date bounds describe observed records, not continuous retention or completeness. "
+    "Session-ref-only joins are not exact route windows. Unattributed routes are not "
+    "failures or successes. Transcript gates cover only the Claude full-transcript subset; "
+    "there is no coverage floor or routing-quality/success certification.")
+
+
+def evidence_coverage(rows, attributions, sessions, adapter_diagnostics=None):
+    """Count each route once, including unknown host/date and unmeasurable evidence."""
+    if len(rows) != len(attributions):
+        raise ValueError("coverage needs one attribution per route")
+    groups = {}
+    for row, attribution in zip(rows, attributions):
+        stamp = parse_ts(row.get("ts"))
+        key = (route_host(row), stamp.strftime("%Y-%m") if stamp else "unknown")
+        entry = groups.setdefault(key, {
+            "host": key[0], "period": key[1], "rows": 0,
+            "anchor_attributed": 0, "session_ref_only": 0,
+            "ambiguous": 0, "unattributed": 0, "evidence_hosts": Counter()})
+        entry["rows"] += 1
+        method = attribution.get("method")
+        if method in ("anchor-command", "anchor-command+ts"):
+            entry["anchor_attributed"] += 1
+        elif method == "session_ref":
+            entry["session_ref_only"] += 1
+        elif method == "ambiguous":
+            entry["ambiguous"] += 1
+        else:
+            entry["unattributed"] += 1
+        session = sessions.get(attribution.get("session"))
+        entry["evidence_hosts"][session.get("host", "claude") if session else "unknown"] += 1
+    for entry in groups.values():
+        entry["unknown_route_evidence"] = entry["rows"] - entry["anchor_attributed"]
+        entry["anchor_attributed_pct"] = entry["anchor_attributed"] / entry["rows"]
+    return {
+        "by_host_period": [groups[key] for key in sorted(groups)],
+        "route_dates": date_coverage(row.get("ts") for row in rows),
+        "anchor_attributed_route_dates": date_coverage(
+            row.get("ts") for row, attr in zip(rows, attributions)
+            if attr.get("method") in ("anchor-command", "anchor-command+ts")),
+        "transcript_event_dates": date_coverage(
+            event.ts for bucket in sessions.values() for event in bucket["events"]),
+        "transcript_adapters": {"claude": "implemented", "codex": "commands-only, opt-in"},
+        "adapter_diagnostics": adapter_diagnostics or {},
+        "limitation": EVIDENCE_LIMITATION,
+    }
+
+
+def print_evidence_coverage(coverage):
+    print("\nEvidence coverage by recorded host and UTC month")
+    for entry in coverage["by_host_period"]:
+        print(f"  {entry['host']} {entry['period']} rows={entry['rows']} "
+              f"anchor={entry['anchor_attributed']} session-only={entry['session_ref_only']} "
+              f"ambiguous={entry['ambiguous']} unattributed={entry['unattributed']}")
+    for label in ("route_dates", "anchor_attributed_route_dates", "transcript_event_dates"):
+        print(f"  {label}: {json.dumps(coverage[label])}")
+    print(coverage["limitation"])
+    if coverage.get("adapter_diagnostics"):
+        print("Adapter diagnostics: " + json.dumps(coverage["adapter_diagnostics"]))
+
+
 # ---------------------------------------------------------------------------
 # Transcript reading
 # ---------------------------------------------------------------------------
 class Event:
     """One transcript line, reduced to what the signals need."""
-    __slots__ = ("ts", "kind", "text", "tool", "cmd", "path", "uuid", "cwd", "session")
+    __slots__ = ("ts", "kind", "text", "tool", "cmd", "path", "uuid", "cwd", "session", "started_at", "completed_at")
 
     def __init__(self, ts, kind, session, uuid, cwd,
-                 text="", tool=None, cmd=None, path=None):
+                 text="", tool=None, cmd=None, path=None, started_at=None, completed_at=None):
         self.ts = ts
         self.kind = kind          # "user" | "assistant_text" | "tool_use"
         self.session = session
@@ -302,6 +323,8 @@ class Event:
         self.tool = tool
         self.cmd = cmd
         self.path = path
+        self.started_at = started_at
+        self.completed_at = completed_at
 
 
 def user_text(message):
@@ -337,6 +360,7 @@ def read_transcript(path):
         handle = path.open(errors="replace")
     except OSError:
         return
+    pending = {}
     with handle:
         for line in handle:
             line = line.strip()
@@ -359,6 +383,25 @@ def read_transcript(path):
             cwd = row.get("cwd")
             message = row.get("message") or {}
             if kind == "user":
+                for block in message.get("content") or []:
+                    if not isinstance(block, dict) or block.get("type") != "tool_result":
+                        continue
+                    event = pending.pop(block.get("tool_use_id"), None)
+                    if (event is None or event.session != session
+                            or block.get("is_error") is not False or ts < event.ts):
+                        continue
+                    result = row.get("toolUseResult") or {}
+                    if not isinstance(result, dict):
+                        continue
+                    codes = [source[key] for source in (result, block)
+                             for key in ("exit_code", "exitCode") if key in source]
+                    if any(type(code) is not int or code != 0 for code in codes):
+                        continue
+                    if any(result.get(key) for key in ('interrupted', 'backgroundTaskId', 'task_id')) or re.search(
+                            r"(?:Exit code|Process exited with code)\s*:?\s*[1-9]\d*",
+                            str(block.get("content", "")), re.I):
+                        continue
+                    event.completed_at = ts
                 text = user_text(message)
                 if text is None:
                     continue
@@ -369,10 +412,13 @@ def read_transcript(path):
                     continue
                 if block.get("type") == "tool_use":
                     inp = block.get("input") or {}
-                    yield Event(ts, "tool_use", session, uuid, cwd,
+                    event = Event(ts, "tool_use", session, uuid, cwd,
                                 tool=block.get("name"),
                                 cmd=inp.get("command") if isinstance(inp.get("command"), str) else None,
                                 path=inp.get("file_path") if isinstance(inp.get("file_path"), str) else None)
+                    if block.get("id"):
+                        pending[block["id"]] = event
+                    yield event
 
 
 def load_sessions(projects_dir):
@@ -381,7 +427,7 @@ def load_sessions(projects_dir):
     Keyed by sessionId rather than by file because one session can span more than one
     file (resume, teleport) and the route window has to follow the session, not the file.
     """
-    sessions = defaultdict(lambda: {"events": [], "files": [], "_seen": set()})
+    sessions = defaultdict(lambda: {"host": "claude", "events": [], "files": [], "_seen": set()})
     if not projects_dir.is_dir():
         return {}
     for path in sorted(projects_dir.glob("*/*.jsonl")):
@@ -407,6 +453,23 @@ def load_sessions(projects_dir):
     return dict(sessions)
 
 
+def load_evidence_sessions(projects_dir, codex_dir=None):
+    sessions = load_sessions(projects_dir)
+    diagnostics = {'codex': {'status': 'not_requested'}}
+    if codex_dir is not None:
+        from codex_transcripts import load_codex_sessions
+        codex, diagnostics['codex'] = load_codex_sessions(codex_dir, Event)
+        # Namespaced Codex keys must never overwrite a Claude session, even if
+        # a malformed Claude transcript uses a Codex-shaped literal session ID.
+        for key, bucket in codex.items():
+            if key in sessions:
+                del sessions[key]
+                diagnostics['codex']['namespace_collisions'] = diagnostics['codex'].get('namespace_collisions', 0) + 1
+            else:
+                sessions[key] = bucket
+    return sessions, diagnostics
+
+
 # ---------------------------------------------------------------------------
 # Anchors: the `cortex log` commands that created the rows
 # ---------------------------------------------------------------------------
@@ -418,25 +481,49 @@ OUTCOME_RE = re.compile(r"cortex\s+outcome\s+(shipped|abandoned|partial|correcte
 def anchor_tasks(command):
     """Extract every task string a `cortex log` command in this shell string declares.
 
-    Shell parsing is done with shlex so that quoting is handled the way the shell handled
-    it. A command that shlex cannot parse (unbalanced quotes from a truncated transcript)
-    contributes nothing rather than a guess.
+    Only conservative literal invocations count. Malformed or unsupported shell
+    syntax contributes nothing rather than a guess.
     """
-    tasks = []
-    for match in LOG_LINE_RE.finditer(command):
-        parts = split_args(command[match.end():])
-        # log-line takes: <routing line> <task> [flags...]
-        if len(parts) >= 2 and not parts[1].startswith("-"):
-            tasks.append(parts[1])
-    for match in LOG_RE.finditer(command):
-        tail = command[match.end():]
-        flag = re.search(r"--task\s+", tail)
-        if not flag:
-            continue
-        parts = split_args(tail[flag.end():])
-        if parts and not parts[0].startswith("-"):
-            tasks.append(parts[0])
-    return tasks
+    from codex_transcripts import command_task
+    return [task for invocation in cortex_commands(command) for verb in ('log', 'log-line')
+            if (task := command_task(invocation, verb)) is not None]
+
+
+def cortex_commands(command):
+    """Literal simple invocations only. Shell scripts and wrappers stay unknown.
+
+    AND lists are supported, but semicolon/OR lists, pipes, redirections,
+    expansions and shell control flow are not evidence of execution.
+    """
+    from codex_transcripts import cortex_command
+    normalized = re.sub(r"\\\r?\n\s*", " ", command)
+    if any(marker in normalized for marker in ('$', '`', '\n', '#', '(', ')', '|')):
+        return []
+    try:
+        lexer = shlex.shlex(normalized, posix=True, punctuation_chars=';&|()<>')
+        lexer.whitespace_split = True
+        parts = list(lexer)
+    except ValueError:
+        return []
+    if any(part in ('if', 'then', 'else', 'fi', 'for', 'while', 'do', 'done', '!')
+           or (part and all(c in ';&|()<>' for c in part) and part != '&&')
+           for part in parts):
+        return []
+    invocations, segment = [], []
+    for part in [*parts, ';']:
+        if part in (';', '&&'):
+            invocation = cortex_command(segment)
+            if not invocation:
+                return []
+            invocations.append(invocation)
+            segment = []
+        else:
+            segment.append(part)
+    return invocations
+
+
+def successful_command(event):
+    return event.tool == 'Bash' and event.completed_at is not None
 
 
 def split_args(text):
@@ -464,7 +551,15 @@ def build_anchor_index(sessions):
         for event in bucket["events"]:
             if event.kind != "tool_use" or not event.cmd or "cortex log" not in event.cmd:
                 continue
-            for task in anchor_tasks(event.cmd):
+            if bucket.get('host') == 'codex':
+                from codex_transcripts import command_task
+                tasks = [t for verb in ('log', 'log-line')
+                         if (t := command_task(event.cmd, verb)) is not None]
+            else:
+                if not successful_command(event):
+                    continue
+                tasks = anchor_tasks(event.cmd)
+            for task in tasks:
                 digest = task_hash(task)
                 index[digest].append((session_id, event.ts, event.cmd))
                 per_session[session_id].append(event.ts)
@@ -504,17 +599,34 @@ def attribute(row, anchor_index, anchor_times, sessions):
     """
     row_ts = parse_ts(row.get("ts"))
     session_ref = row.get("session_ref")
+    host = route_host(row)
 
-    candidates = anchor_index.get(row.get("task_hash"), [])
-    # Prefer an anchor inside the session the row itself names, when it names one.
+    if host not in ("unknown", "claude", "codex"):
+        return {"method": "none", "confidence": "none", "session": None,
+                "note": f"no supported transcript adapter for recorded host {host}; "
+                        "route evidence is unknown"}
+
+    candidates = [c for c in anchor_index.get(row.get("task_hash"), [])
+                  if c[0] in sessions and (host == 'unknown' or sessions[c[0]].get('host', 'claude') == host)]
+    # Codex always requires an exact native thread reference. A process fallback
+    # or absent reference cannot be upgraded by matching task text and time.
+    candidates = [c for c in candidates if sessions[c[0]].get('host') != 'codex'
+                  or session_ref == sessions[c[0]].get('session_ref')]
+    # An explicit session reference is a constraint, not a preference.
     if session_ref:
-        scoped = [c for c in candidates if c[0] == session_ref]
-        if scoped:
-            candidates = scoped
+        scoped = [c for c in candidates
+                  if sessions[c[0]].get('session_ref', c[0]) == session_ref]
+        candidates = scoped
 
     chosen = None
     method = None
     if len(candidates) == 1:
+        # A unique surviving command is not proof of this execution: other
+        # transcripts may be missing, and the same task can recur months later.
+        if row_ts is None or abs(candidates[0][1] - row_ts) > ANCHOR_TS_TOLERANCE:
+            return {"method": "none", "confidence": "none", "session": None,
+                    "note": "singleton anchor lacks a valid route timestamp or exceeds "
+                            "the timestamp tolerance; no route window established"}
         chosen = candidates[0]
         method = "anchor-command"
     elif len(candidates) > 1:
@@ -530,7 +642,9 @@ def attribute(row, anchor_index, anchor_times, sessions):
                             f"{len(near)} of them are within the timestamp tolerance"}
 
     if chosen is None:
-        if session_ref and session_ref in sessions:
+        if (session_ref and session_ref in sessions
+                and sessions[session_ref].get('host', 'claude') == 'claude'
+                and host in ('unknown', 'claude')):
             events = sessions[session_ref]["events"]
             return {"method": "session_ref", "confidence": "medium",
                     "session": session_ref,
@@ -541,9 +655,8 @@ def attribute(row, anchor_index, anchor_times, sessions):
                             "window is the whole session, so signals may belong to a "
                             "different route in it"}
         return {"method": "none", "confidence": "none", "session": None,
-                "note": "no anchor command in any transcript and no session_ref; "
-                        "this row predates session_ref and its creating command was "
-                        "not preserved"}
+                "note": "no matching anchor command or session_ref in the scanned "
+                        "supported evidence; other hosts and missing history are unknown"}
 
     session_id, anchor_ts, command = chosen
     later = [t for t in anchor_times.get(session_id, []) if t > anchor_ts]
@@ -555,7 +668,11 @@ def attribute(row, anchor_index, anchor_times, sessions):
     elif later:
         kind = "route"
     drift = abs(anchor_ts - row_ts) if row_ts else None
+    started_at = next((e.started_at for e in events
+                       if e.ts == anchor_ts and e.cmd == command), None)
     return {"method": method,
+            "evidence_host": sessions[session_id].get('host', 'claude'),
+            "anchor_started_at": started_at,
             "confidence": "high" if (drift is not None and drift <= ANCHOR_TS_TOLERANCE) else "medium",
             "session": session_id,
             "window_kind": kind,
@@ -779,8 +896,11 @@ def signal_label_provenance(row, sessions, attribution):
     for event in sessions[session_id]["events"]:
         if event.kind != "tool_use" or not event.cmd or "cortex" not in event.cmd:
             continue
-        declares = bool(LOG_LINE_RE.search(event.cmd) or LOG_RE.search(event.cmd))
-        closes = OUTCOME_RE.search(event.cmd)
+        if not successful_command(event):
+            continue
+        declares = bool(anchor_tasks(event.cmd))
+        closes = next((OUTCOME_RE.search(command) for command in cortex_commands(event.cmd)
+                       if OUTCOME_RE.search(command)), None)
         if event.ts > start and declares:
             anchors_after.append((event.ts, event.cmd, closes))
         if closes and not declares and start <= event.ts <= (end or event.ts):
@@ -917,8 +1037,10 @@ def derive(row, sessions, anchor_index, anchor_times, all_rows, use_git):
     attribution = attribute(row, anchor_index, anchor_times, sessions)
     record = {
         "schema": SCHEMA_VERSION,
+        "event_id": row.get("event_id") or row.get("_id"),
         "task_hash": row.get("task_hash"),
         "route_ts": row.get("ts"),
+        "host": route_host(row),
         "route": {"project": row.get("project"), "class": row.get("class"),
                   "system": row.get("system"), "pattern": row.get("pattern"),
                   "tier": row.get("tier"), "task": row.get("task")},
@@ -936,6 +1058,11 @@ def derive(row, sessions, anchor_index, anchor_times, all_rows, use_git):
         record["derived_state_note"] = (
             "unattributed: no transcript window could be established, so no signal "
             "could be evaluated. This says nothing about the route.")
+        return record
+
+    if sessions[session_id].get('evidence_scope') == 'commands-only':
+        record['derived_state_note'] = ('Codex command ownership and route anchor verified; '
+            'user-text, outcome and effort signals are not graded by this adapter.')
         return record
 
     start = attribution.get("start")
@@ -1039,7 +1166,8 @@ def orphan_evidence(sessions, anchor_times, records):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--log", default=str(LOG_PATH), help="cortex log to read (never written)")
-    parser.add_argument("--projects", default=str(PROJECTS_DIR), help="transcript root")
+    parser.add_argument("--projects", default=str(PROJECTS_DIR), help="Claude transcript root")
+    parser.add_argument("--codex-sessions", type=Path, help="opt-in local Codex rollout root, commands-only attribution")
     parser.add_argument("--out", default=str(DEFAULT_OUT), help="output JSONL")
     parser.add_argument("--no-git", action="store_true", help="skip git history checks")
     parser.add_argument("--summary", action="store_true", help="print a summary to stdout")
@@ -1052,18 +1180,13 @@ def main(argv=None):
     if not log_path.exists():
         print(f"no log at {log_path}", file=sys.stderr)
         return 1
-    raw = []
-    for line in log_path.read_text().splitlines():
-        line = line.strip()
-        if line:
-            try:
-                raw.append(json.loads(line))
-            except ValueError:
-                continue
-    rows = [r for r in raw if is_route(r)]
-    non_route_rows = len(raw) - len(rows)
+    try:
+        rows, non_route_rows = load_route_log(log_path)
+    except Exception as exc:
+        print(f"could not load corrected route view: {exc}", file=sys.stderr)
+        return 1
 
-    sessions = load_sessions(Path(args.projects))
+    sessions, adapter_diagnostics = load_evidence_sessions(Path(args.projects), args.codex_sessions)
     anchor_index, anchor_times = build_anchor_index(sessions)
 
     records = [derive(r, sessions, anchor_index, anchor_times, rows, not args.no_git)
@@ -1082,6 +1205,7 @@ def main(argv=None):
                 if base.get("turns") else None)
 
     orphans = orphan_evidence(sessions, anchor_times, records)
+    coverage = evidence_coverage(rows, [rec["attribution"] for rec in records], sessions, adapter_diagnostics)
 
     if not args.dry_run:
         out_path = Path(args.out)
@@ -1093,7 +1217,10 @@ def main(argv=None):
                 "generated_at": iso(datetime.now(timezone.utc)),
                 "log": str(log_path),
                 "log_rows": len(rows),
+                "non_route_rows_excluded": non_route_rows,
                 "transcript_sessions": len(sessions),
+                "transcript_root": str(Path(args.projects)),
+                "evidence_coverage": coverage,
                 "orphan_evidence_records": len(orphans),
                 "baselines": baselines,
                 "warning": "Derived failure evidence only. No positive labels. "
@@ -1121,6 +1248,7 @@ def main(argv=None):
                     print(f"  evidence: {f['evidence'][:240]!r}")
 
     if args.summary or args.dry_run:
+        print_evidence_coverage(coverage)
         attributed = [r for r in records if r["attribution"].get("session")]
         methods = Counter(r["attribution"]["method"] for r in records)
         signals = Counter(f["signal"] for r in records for f in r["signals"])

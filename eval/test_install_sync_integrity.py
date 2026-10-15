@@ -37,6 +37,152 @@ class InstallerTests(IsolatedTest):
     def install(self):
         return self.run_command('bash', str(ROOT / 'install.sh'))
 
+    def test_installed_skill_use_imports_packaged_helper_and_keeps_streams_separate(self):
+        self.env.update(CORTEX_HOST='codex', CORTEX_SESSION_ID='installed-fixture')
+        result = self.install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state = Path(self.env['CLAUDE_DIR'])
+        cli = state / 'bin/cortex'
+        # Do not permit a repository PYTHONPATH to hide missing packaging.
+        self.env.pop('PYTHONPATH', None)
+        result = self.run_command(sys.executable, '-I', str(cli), 'log-line',
+                                  'Direct > fixture @ L2', 'installed packaging fixture',
+                                  '--class', 'build')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        log = state / 'cortex-log.jsonl'
+        before = log.read_bytes()
+        route = json.loads(before.splitlines()[-1])
+        skill = self.root / 'fixture/SKILL.md'
+        skill.parent.mkdir()
+        skill.write_text('---\nname: fixture\n---\nSynthetic private body.\n')
+        evidence = state / 'cortex-skill-evidence.jsonl'
+        self.assertFalse(evidence.exists())
+        result = self.run_command(sys.executable, '-I', str(cli), 'skill-use',
+                                  '--ref', route['event_id'], '--skill', str(skill),
+                                  '--stage', 'applied')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        rows = [json.loads(line) for line in evidence.read_text().splitlines()]
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual(row['event'], 'skill_evidence')
+        self.assertEqual(row['ref'], route['event_id'])
+        self.assertEqual(row['stage'], 'applied')
+        self.assertEqual(row['provenance'], 'self_reported')
+        self.assertEqual(row['skill_path'], str(skill.resolve()))
+        self.assertEqual(row['skill_sha256'], hashlib.sha256(skill.read_bytes()).hexdigest())
+        self.assertNotIn('Synthetic private body.', evidence.read_text())
+        self.assertEqual(log.read_bytes(), before)
+
+    def test_shared_and_codex_copies_preserved_or_maintained(self):
+        shared = self.home / '.agents/skills'
+        codex = Path(self.env['CODEX_DIR']) / 'skills'
+        for root in (shared, codex):
+            path = root / 'cortex-log/SKILL.md'
+            path.parent.mkdir(parents=True)
+            path.write_bytes((ROOT / 'skills/cortex-log/SKILL.md').read_bytes())
+        self.assertEqual(self.install().returncode, 0)
+        for root in (shared, codex):
+            for name in ('cortex-log', 'cortex-learn', 'cortex-reroute'):
+                path = root / name / 'SKILL.md'
+                self.assertEqual(path.read_bytes(), (ROOT / 'skills' / name / 'SKILL.md').read_bytes())
+        custom = shared / 'cortex-reroute/SKILL.md'
+        custom.write_text('python3 ~/.Codex/bin/cortex correct # local customization\n')
+        before = {p: p.read_bytes() for p in self.home.rglob('*') if p.is_file()}
+        result = self.install()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('customized skill', result.stderr)
+        self.assertEqual(before, {p: p.read_bytes() for p in self.home.rglob('*') if p.is_file()})
+
+    def test_shared_links_are_refused_without_touching_targets(self):
+        external = self.root / 'external-skills'
+        external.mkdir()
+        shared = self.home / '.agents'
+        shared.mkdir()
+        (shared / 'skills').symlink_to(external)
+        result = self.install()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(list(external.iterdir()), [])
+        self.assertFalse(Path(self.env['CLAUDE_DIR']).exists())
+
+    def test_shared_skill_and_stamp_links_refuse_even_matching_content(self):
+        for index, relative in enumerate(('cortex-log', 'cortex-log/SKILL.md',
+                                           'cortex-log/.cortex-installed.sha256')):
+            for dangling in (False, True):
+                with self.subTest(relative=relative, dangling=dangling):
+                    case = self.root / f'shared-{index}-{dangling}'
+                    case.mkdir()
+                    self.env['HOME'] = str(case)
+                    self.env['CLAUDE_DIR'] = str(case / '.claude')
+                    self.env['CODEX_DIR'] = str(case / '.codex')
+                    target = case / '.agents/skills' / relative
+                    target.parent.mkdir(parents=True)
+                    external = case / 'external'
+                    if not dangling:
+                        if relative == 'cortex-log':
+                            external.mkdir()
+                            shutil.copy2(ROOT / 'skills/cortex-log/SKILL.md', external / 'SKILL.md')
+                        else:
+                            external.write_bytes((ROOT / 'skills/cortex-log/SKILL.md').read_bytes())
+                    target.symlink_to(external)
+                    result = self.install()
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('symlink', result.stderr)
+                    self.assertTrue(target.is_symlink())
+                    self.assertFalse((case / '.claude').exists())
+                    if dangling:
+                        self.assertFalse(external.exists())
+
+    def test_doctor_checks_shared_duplicates_and_invalid_references(self):
+        (self.home / '.agents').mkdir()
+        Path(self.env['CODEX_DIR']).mkdir()
+        self.assertEqual(self.install().returncode, 0)
+        shared = self.home / '.agents/skills/cortex-log/SKILL.md'
+        shared.write_text('python3 ~/.Codex/bin/cortex show\n')
+        result = self.run_command(sys.executable, str(ROOT / 'bin/cortex'),
+                                  'doctor', '--no-probe', '-v')
+        self.assertIn('invalid CLI reference', result.stdout)
+        self.assertIn(str(shared), result.stdout)
+        self.assertIn('duplicate personal skill cortex-log', result.stdout)
+        shared.unlink()
+        shared.symlink_to(self.root / 'missing-skill')
+        result = self.run_command(sys.executable, str(ROOT / 'bin/cortex'),
+                                  'doctor', '--no-probe')
+        self.assertIn('unreadable personal skill', result.stdout)
+
+    def test_doctor_duplicate_severity_and_label_limits(self):
+        (self.home / '.agents').mkdir()
+        Path(self.env['CODEX_DIR']).mkdir()
+        self.assertEqual(self.install().returncode, 0)
+        self.env['CORTEX_REPO'] = str(ROOT)
+        state = Path(self.env['CLAUDE_DIR'])
+        (state / 'cortex-log.jsonl').write_text(json.dumps(
+            {'system': 'Direct', 'task': 'fixture', 'tier': 'L2'}) + '\n')
+
+        def doctor():
+            return self.run_command(sys.executable, str(ROOT / 'bin/cortex'),
+                                    'doctor', '--no-probe', '-v').stdout
+
+        output = doctor()
+        self.assertIn('✓ duplicate personal skill cortex-log (byte-identical)', output)
+        self.assertNotIn('! duplicate personal skill', output)
+        self.assertNotIn('system never used', output)
+        self.assertNotIn('system used:', output)
+        self.assertIn('no routes labelled system OMC; usage unknown, aliases/other hosts not measured', output)
+        self.assertIn('routes labelled system Direct: 1 (usage unknown)', output)
+        shared = self.home / '.agents/skills/cortex-log/SKILL.md'
+        shared.write_text(shared.read_text() + '\nLocal customization.\n')
+        output = doctor()
+        self.assertIn('! duplicate personal skill cortex-log (divergent, undocumented content)', output)
+        self.assertEqual(output.count(f'personal skill differs from repo source: {shared}'), 1)
+        self.assertNotIn('skill cortex-log differs from repo source', output)
+        (shared.parent / '.cortex-installed.sha256').write_text(
+            hashlib.sha256(shared.read_bytes()).hexdigest() + '\n')
+        output = doctor()
+        self.assertIn('✓ duplicate personal skill cortex-log (divergent, installation hashes verified', output)
+        self.assertNotIn('! duplicate personal skill cortex-log', output)
+        # Installation hashes document installed bytes, not agreement with source.
+        self.assertIn(f'personal skill differs from repo source: {shared}', output)
+
     def test_fresh_and_repeat_preserve_registry_and_log(self):
         codex = Path(self.env['CODEX_DIR'])
         codex.mkdir()
@@ -45,6 +191,8 @@ class InstallerTests(IsolatedTest):
         state = Path(self.env['CLAUDE_DIR'])
         self.assertEqual((state / 'bin/cortex_jev.py').read_bytes(),
                          (ROOT / 'bin/cortex_jev.py').read_bytes())
+        self.assertEqual((state / 'bin/cortex_skill_evidence.py').read_bytes(),
+                         (ROOT / 'bin/cortex_skill_evidence.py').read_bytes())
         adviser = self.run_command(sys.executable, str(state / 'bin/cortex'),
                                    'advise', 'installation smoke check', '--mode', 'off', '--json')
         self.assertEqual(adviser.returncode, 0, adviser.stderr)
@@ -61,7 +209,7 @@ class InstallerTests(IsolatedTest):
         self.assertTrue((codex / 'skills/cortex-delegate/SKILL.md').is_file())
 
     def test_symlink_conflicts_preflight_every_destination(self):
-        targets = ('bin', 'bin/cortex', 'bin/cortex_jev.py', 'skills', 'skills/cortex-init',
+        targets = ('bin', 'bin/cortex', 'bin/cortex_jev.py', 'bin/cortex_skill_evidence.py', 'skills', 'skills/cortex-init',
                    'skills/cortex-init/SKILL.md', 'cortex.md', 'cortex.md.new',
                    'cortex-log.jsonl', 'codex/skills',
                    'codex/skills/cortex-delegate', 'codex/skills/cortex-delegate/SKILL.md',
@@ -237,10 +385,194 @@ class SyncTests(IsolatedTest):
         self.git('-c', 'core.hooksPath=/dev/null', 'commit', '-qm', 'fixture')
         return self.git('rev-parse', 'HEAD')
 
-    def sync(self, apply=False):
+    def sync(self, apply=False, base=None):
         return self.run_command(sys.executable, '-B', str(ROOT / 'bin/sync-agents'),
                                 '--src', str(self.src), '--dst', str(self.dst),
+                                *(['--base', base] if base else []),
                                 *(['--apply'] if apply else []))
+
+    def snapshot(self, root):
+        """Include directories and dangling links without following those links."""
+        result = {}
+        for path in [root, *root.rglob('*')]:
+            name = str(path.relative_to(root))
+            if path.is_symlink():
+                result[name] = ('link', os.readlink(path))
+            elif path.is_dir():
+                result[name] = ('directory',)
+            else:
+                result[name] = ('file', path.read_bytes())
+        return result
+
+    def test_all_destination_links_preflight_before_any_mutation(self):
+        self.write('update.md', 'original', 'upstream update')
+        (self.src / 'z-team').mkdir()
+        self.write('z-team/agent.md', 'original', 'new agent')
+        self.commit()
+        original = self.dst
+        targets = ('update.md', 'z-team', 'z-team/agent.md', '.synced-from',
+                   '.synced-bases.json')
+        for index, relative in enumerate(targets):
+            for dangling in (False, True):
+                with self.subTest(relative=relative, dangling=dangling):
+                    case = self.root / f'links-{index}-{dangling}'
+                    case.mkdir()
+                    self.dst = case / 'installed'
+                    shutil.copytree(original, self.dst)
+                    external = case / 'external'
+                    if not dangling:
+                        if relative == 'z-team':
+                            external.mkdir()
+                            (external / 'agent.md').write_text('external content')
+                        else:
+                            external.write_text('external content')
+                    target = self.dst / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    if target.exists():
+                        target.unlink()
+                    target.symlink_to(external)
+                    before = self.snapshot(case)
+                    for apply in (False, True):
+                        result = self.sync(apply=apply)
+                        self.assertNotEqual(result.returncode, 0, result.stdout)
+                        self.assertIn('unsafe destination', result.stderr)
+                        self.assertEqual(self.snapshot(case), before)
+        self.dst = original
+
+    def test_destination_and_ancestor_links_are_rejected(self):
+        self.write('update.md', 'original', 'upstream update')
+        self.commit()
+        original = self.dst
+        link = self.root / 'linked'
+        link.symlink_to(original)
+        ancestor = self.root / 'ancestor'
+        ancestor.symlink_to(self.root)
+        for destination in (link, ancestor / 'installed',
+                            link / '..' / 'installed'):
+            with self.subTest(destination=destination):
+                self.dst = destination
+                before = self.snapshot(original)
+                result = self.sync(apply=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('unsafe destination', result.stderr)
+                self.assertEqual(self.snapshot(original), before)
+        self.dst = original
+
+    def test_wrong_destination_types_preflight_before_any_mutation(self):
+        self.write('update.md', 'original', 'upstream update')
+        (self.src / 'z-team').mkdir()
+        self.write('z-team/agent.md', 'original', 'new agent')
+        self.commit()
+        original = self.dst
+        for index, relative in enumerate(('z-team', 'z-team/agent.md',
+                                           '.synced-from', '.synced-bases.json')):
+            with self.subTest(relative=relative):
+                self.dst = self.root / f'wrong-type-{index}'
+                shutil.copytree(original, self.dst)
+                target = self.dst / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                if target.exists():
+                    target.unlink()
+                if relative == 'z-team':
+                    target.write_text('not a directory')
+                else:
+                    target.mkdir()
+                before = self.snapshot(self.dst)
+                result = self.sync(apply=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('unsafe destination', result.stderr)
+                self.assertEqual(self.snapshot(self.dst), before)
+        self.dst = original
+
+    def test_case_insensitive_metadata_collision_refuses_before_writes(self):
+        self.write('update.md', 'original', 'upstream update')
+        (self.src / '.SYNCED-FROM').mkdir()
+        self.write('.SYNCED-FROM/agent.md', 'original', 'new agent')
+        self.commit()
+        before = self.snapshot(self.dst)
+        result = self.sync(apply=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('unsafe destination', result.stderr)
+        self.assertEqual(self.snapshot(self.dst), before)
+
+    def test_dirty_source_uses_only_pinned_committed_blobs(self):
+        self.write('merge.md', 'custom description', 'original body', local=True)
+        self.write('merge.md', 'original', 'committed body')
+        self.write('update.md', 'original', 'committed body')
+        (self.src / 'team').mkdir()
+        self.write('team/new.md', 'original', 'committed new body')
+        head = self.commit()
+        committed_update = (self.src / 'update.md').read_bytes()
+        committed_new = (self.src / 'team/new.md').read_bytes()
+        self.write('update.md', 'staged edit', 'staged body')
+        self.write('staged-new.md', 'staged', 'uncommitted new body')
+        self.git('add', '.')
+        self.write('update.md', 'unstaged edit', 'unstaged body')
+        self.write('merge.md', 'dirty description', 'dirty body')
+        (self.src / 'team/new.md').unlink()
+        self.write('untracked.md', 'untracked', 'untracked body')
+        # A source working-tree link must not be read either.
+        (self.src / 'conflict.md').unlink()
+        (self.src / 'conflict.md').symlink_to(self.root / 'absent')
+        before = self.snapshot(self.dst)
+        result = self.sync()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.snapshot(self.dst), before)
+        result = self.sync(apply=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.dst / 'update.md').read_bytes(), committed_update)
+        self.assertEqual((self.dst / 'team/new.md').read_bytes(), committed_new)
+        self.assertIn('custom description', (self.dst / 'merge.md').read_text())
+        self.assertIn('committed body', (self.dst / 'merge.md').read_text())
+        self.assertFalse((self.dst / 'staged-new.md').exists())
+        self.assertFalse((self.dst / 'untracked.md').exists())
+        self.assertEqual((self.dst / '.synced-from').read_text(), head + '\n')
+        installed = self.snapshot(self.dst)
+        self.assertEqual(self.sync(apply=True).returncode, 0)
+        self.assertEqual(self.snapshot(self.dst), installed)
+
+    def test_committed_source_symlink_is_rejected_before_writes(self):
+        self.write('update.md', 'original', 'upstream update')
+        (self.src / 'z-link.md').symlink_to('update.md')
+        self.commit()
+        before = self.snapshot(self.dst)
+        result = self.sync(apply=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('not a regular committed agent', result.stderr)
+        self.assertEqual(self.snapshot(self.dst), before)
+
+    def test_new_agent_directories_cannot_collide_with_missing_stamps(self):
+        (self.dst / '.synced-from').unlink()
+        self.write('update.md', 'original', 'upstream update')
+        for name in ('.synced-from', '.synced-bases.json'):
+            with self.subTest(name=name):
+                directory = self.src / name
+                directory.mkdir()
+                self.write(f'{name}/agent.md', 'original', 'new agent')
+                self.commit()
+                before = self.snapshot(self.dst)
+                result = self.sync(apply=True, base=self.base)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('target collision', result.stderr)
+                self.assertEqual(self.snapshot(self.dst), before)
+                (directory / 'agent.md').unlink()
+                directory.rmdir()
+
+    def test_clean_updates_copy_exact_bytes_and_keep_local_only_files(self):
+        data = b'---\r\nname: fixture\r\ndescription: original\r\n---\r\nnew body\r\n'
+        (self.src / 'update.md').write_bytes(data)
+        (self.src / 'team').mkdir()
+        (self.src / 'team/new.md').write_bytes(data)
+        head = self.commit()
+        self.write('local-only.md', 'local', 'local body', local=True)
+        local = (self.dst / 'local-only.md').read_bytes()
+        result = self.sync(apply=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.dst / 'update.md').read_bytes(), data)
+        self.assertEqual((self.dst / 'team/new.md').read_bytes(), data)
+        self.assertEqual((self.dst / 'local-only.md').read_bytes(), local)
+        self.assertEqual((self.dst / '.synced-from').read_text(), head + '\n')
+        self.assertEqual(json.loads((self.dst / '.synced-bases.json').read_text()), {})
 
     def test_conflicts_keep_base_across_runs_while_successful_files_advance(self):
         self.write('conflict.md', 'local description', 'original body', local=True)

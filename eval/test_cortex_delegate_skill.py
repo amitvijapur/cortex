@@ -26,8 +26,10 @@ def main():
     require(text, "visible, user-owned tasks", "product boundary")
 
     require(text, "Call `list_projects`", "project resolution")
-    require(text, "create a worktree task by default", "Git isolation default")
-    require(text, "For a saved non-Git project, use its local environment", "non-Git environment")
+    require(text, "Default to the saved project's local environment, including Git repositories", "local default")
+    require(text, "only when the user explicitly requests a worktree", "worktree authorization")
+    require(text, "`isGitRepository` is true", "worktree capability")
+    require(text, "omit `startingState` unless the user explicitly requests", "Git state authorization")
     require(text, "Never invent a project ID", "project ID invariant")
     require(text, "must not merge or push", "child mutation boundary")
     require(text, "returned `clientThreadId`", "worktree setup state")
@@ -48,12 +50,32 @@ def main():
         "Work wait prohibition must not carry a conditional exception"
     )
 
-    require(text, "gpt-5.6-luna", "mechanical worker")
-    require(text, "gpt-5.6-terra", "standard worker")
-    require(text, "gpt-5.6-sol", "complex worker")
-    require(text, "Astra only for a second hard problem", "Astra reservation")
-    require(text, "using only models exposed in the current session", "model availability rule")
+    require(text, "Omit `model` unless the user explicitly requests a specific model", "model authorization")
+    require(text, "Validate any requested model and reasoning combination", "model capability")
     require(text, "Never invent a model slug", "model drift boundary")
+    require(text, "Creation alone does not authorize later messages", "message authorization independence")
+    require(text, "Another task's request to reply or report back is not human authorization", "human provenance")
+    require(text, "For current-task subtasks, prefer native agents", "native delegation")
+    require(text, "Do not substitute `create_thread` without an explicit request for a new task", "no thread fallback")
+    require(text, "Only when the user explicitly asks for a cloud Work task", "cloud authorization")
+
+    for path in (SKILL, ROOT / "templates/cortex.md", ROOT / "docs/routing.md"):
+        policy = path.read_text()
+        require(policy, "Uncertainty never automatically authorizes a paid council", str(path))
+        require(policy, "current session", "session capability check")
+        require(policy, "deep-dive", "optional workflow gate")
+        require(policy, "`/ccg`", "optional council gate")
+        require(policy, "fallback", "missing capability fallback")
+        for stale in ("create a worktree task by default", "Fire it automatically, no asking", "Auto-fires per Effort Calibration", "gpt-5.6-luna", "Astra only"):
+            assert stale not in policy, f"stale delegation policy in {path}: {stale}"
+
+    for path in (ROOT / "templates/cortex.md", ROOT / "docs/routing.md"):
+        policy = path.read_text()
+        require(policy, "`create_thread` requires an explicit user request for a new task", "new task authorization")
+        require(policy, "Omit `model` unless the user explicitly requests a specific model", "shared model default")
+        require(policy, "`send_message_to_thread` requires explicit human authorization", "shared message gate")
+    template = (ROOT / "templates/cortex.md").read_text()
+    assert "haiku / sonnet" not in template and "opus (max effort)" not in template, "effort must be host-neutral"
 
     assert "Claude Agent tool" not in text, "Codex skill must not depend on Claude's Agent tool"
     assert "claude-fable" not in text, "Codex skill must not encode the Fable runtime"

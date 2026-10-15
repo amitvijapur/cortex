@@ -10,6 +10,19 @@ CLAUDE_DIR="${CORTEX_HOME:-${CLAUDE_DIR:-$HOME/.claude}}"
 BIN_DIR="$CLAUDE_DIR/bin"
 SKILLS_DIR="$CLAUDE_DIR/skills"
 CODEX_DIR="${CODEX_DIR:-${CODEX_HOME:-$HOME/.codex}}"
+SHARED_SKILLS_DIR="$HOME/.agents/skills"
+
+# Keep all exposed copies maintained, without creating optional agent homes.
+skill_targets=("$SKILLS_DIR")
+skill_names=("cortex-log cortex-learn cortex-reroute cortex-init")
+if [ -e "$CODEX_DIR" ] || [ -L "$CODEX_DIR" ]; then
+  skill_targets+=("$CODEX_DIR/skills")
+  skill_names+=("cortex-log cortex-learn cortex-reroute cortex-delegate")
+fi
+if [ -e "$HOME/.agents" ] || [ -L "$HOME/.agents" ]; then
+  skill_targets+=("$SHARED_SKILLS_DIR")
+  skill_names+=("cortex-log cortex-learn cortex-reroute")
+fi
 
 bold()  { printf '\033[1m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
@@ -78,20 +91,19 @@ check_destination "$BIN_DIR" dir
 check_destination "$SKILLS_DIR" dir
 check_destination "$BIN_DIR/cortex" file
 check_destination "$BIN_DIR/cortex_jev.py" file
-for skill in cortex-log cortex-learn cortex-reroute cortex-init; do
-  check_destination "$SKILLS_DIR/$skill" dir
-  check_destination "$SKILLS_DIR/$skill/.cortex-installed.sha256" file
-  check_destination "$SKILLS_DIR/$skill/SKILL.md" skill "$SCRIPT_DIR/skills/$skill/SKILL.md"
+check_destination "$BIN_DIR/cortex_skill_evidence.py" file
+for index in "${!skill_targets[@]}"; do
+  target="${skill_targets[$index]}"
+  check_destination "$target" dir
+  for skill in ${skill_names[$index]}; do
+    check_destination "$target/$skill" dir
+    check_destination "$target/$skill/.cortex-installed.sha256" file
+    check_destination "$target/$skill/SKILL.md" skill "$SCRIPT_DIR/skills/$skill/SKILL.md"
+  done
 done
 check_destination "$CLAUDE_DIR/cortex.md" file
 check_destination "$CLAUDE_DIR/cortex.md.new" file
 check_destination "$CLAUDE_DIR/cortex-log.jsonl" file
-if [ -e "$CODEX_DIR" ] || [ -L "$CODEX_DIR" ]; then
-  check_destination "$CODEX_DIR" dir
-  check_destination "$CODEX_DIR/skills/cortex-delegate" dir
-  check_destination "$CODEX_DIR/skills/cortex-delegate/.cortex-installed.sha256" file
-  check_destination "$CODEX_DIR/skills/cortex-delegate/SKILL.md" skill "$SCRIPT_DIR/skills/cortex-delegate/SKILL.md"
-fi
 
 # Ensure target dirs exist only after the complete preflight succeeds.
 mkdir -p "$BIN_DIR" "$SKILLS_DIR"
@@ -99,30 +111,20 @@ mkdir -p "$BIN_DIR" "$SKILLS_DIR"
 # 1. CLI binary
 install -m 0755 "$SCRIPT_DIR/bin/cortex" "$BIN_DIR/cortex"
 install -m 0644 "$SCRIPT_DIR/bin/cortex_jev.py" "$BIN_DIR/cortex_jev.py"
+install -m 0644 "$SCRIPT_DIR/bin/cortex_skill_evidence.py" "$BIN_DIR/cortex_skill_evidence.py"
 green "  ✓ bin/cortex          → $BIN_DIR/cortex"
 green "  ✓ bin/cortex_jev.py    → $BIN_DIR/cortex_jev.py (adviser off by default)"
 
 # 2. Skills
-for skill in cortex-log cortex-learn cortex-reroute cortex-init; do
-  mkdir -p "$SKILLS_DIR/$skill"
-  cp "$SCRIPT_DIR/skills/$skill/SKILL.md" "$SKILLS_DIR/$skill/SKILL.md"
-  skill_digest "$SKILLS_DIR/$skill/SKILL.md" > "$SKILLS_DIR/$skill/.cortex-installed.sha256"
-  green "  ✓ skills/$skill/SKILL.md"
+for index in "${!skill_targets[@]}"; do
+  target="${skill_targets[$index]}"
+  for skill in ${skill_names[$index]}; do
+    mkdir -p "$target/$skill"
+    cp "$SCRIPT_DIR/skills/$skill/SKILL.md" "$target/$skill/SKILL.md"
+    skill_digest "$target/$skill/SKILL.md" > "$target/$skill/.cortex-installed.sha256"
+    green "  ✓ skills/$skill/SKILL.md → $target/$skill"
+  done
 done
-
-# cortex-delegate uses Codex desktop task APIs, so installing it into Claude Code
-# would advertise tools that runtime cannot call. Install it only when a Codex home
-# already exists. Do not create ~/.codex as a side effect for Claude-only users.
-if [ -d "$CODEX_DIR" ]; then
-  mkdir -p "$CODEX_DIR/skills/cortex-delegate"
-  cp "$SCRIPT_DIR/skills/cortex-delegate/SKILL.md" \
-     "$CODEX_DIR/skills/cortex-delegate/SKILL.md"
-  skill_digest "$CODEX_DIR/skills/cortex-delegate/SKILL.md" > \
-     "$CODEX_DIR/skills/cortex-delegate/.cortex-installed.sha256"
-  green "  ✓ skills/cortex-delegate/SKILL.md → $CODEX_DIR/skills/cortex-delegate"
-else
-  dim "  - skipped cortex-delegate (no Codex home at $CODEX_DIR)"
-fi
 
 # 3. cortex.md — only if not already present
 CORTEX_MD="$CLAUDE_DIR/cortex.md"

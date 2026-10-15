@@ -70,7 +70,7 @@ Cortex answers four questions before any model touches the work:
 - Does it span enough independent disciplines to need **parallel specialists**?
 - Does it need a **multi-model council** at all? Most tasks do not.
 
-Every decision is logged with its reasoning and, when the task ends, its outcome. That log surfaces repeating patterns, weights future routes toward what shipped, and exposes where effort is being overspent.
+Every decision is logged with its reasoning and, when the task ends, its outcome. That log surfaces repeating patterns and exposes where effort is being overspent. Hints retrieve recent distinct routes; outcomes inform the reader, not the ranking.
 
 ---
 
@@ -95,8 +95,10 @@ Verify with `python3 ~/.claude/bin/cortex doctor`.
 |---|---|
 | `bin/cortex` | `~/.claude/bin/cortex` |
 | `bin/cortex_jev.py` | `~/.claude/bin/cortex_jev.py` |
+| `bin/cortex_skill_evidence.py` | `~/.claude/bin/cortex_skill_evidence.py` |
 | `skills/cortex-log`, `cortex-learn`, `cortex-reroute`, `cortex-init` | `~/.claude/skills/` |
-| `skills/cortex-delegate` | `~/.codex/skills/`, when a Codex home already exists |
+| `skills/cortex-log`, `cortex-learn`, `cortex-reroute`, `cortex-delegate` | `${CODEX_DIR:-${CODEX_HOME:-~/.codex}}/skills/`, when that Codex home already exists |
+| `skills/cortex-log`, `cortex-learn`, `cortex-reroute` | `~/.agents/skills/`, when `~/.agents` already exists; existing copies require matching content, an installation hash, or exact Git history, otherwise installation stops before writes; symlinks are refused |
 | `templates/cortex.md` | `~/.claude/cortex.md`, only if you don't already have one |
 
 It does not touch `settings.json`.
@@ -177,6 +179,11 @@ Then load `cortex.md` into whatever your agent reads:
 | **Aider** | point `read:` in `.aider.conf.yml` at it |
 
 Only two things are Claude Code conveniences: the slash-command skills (elsewhere, call `python3 bin/cortex …` directly) and the example registry, which you should swap for systems your agent can actually invoke.
+
+New route events record host/session provenance, using `CODEX_THREAD_ID` for Codex.
+The evaluation reports can opt into [Codex command attribution](docs/codex-attribution.md)
+with `--codex-sessions`. This conservative reader verifies command ownership, not
+full-transcript adherence or work success. Old process-based references remain unknown.
 
 ---
 
@@ -292,6 +299,10 @@ The harness has rejected two changes that were already built: a BM25F ranker tha
 
 ## CLI reference
 
+Optional [skill-use evidence](docs/skill-evidence.md) records self-reported reads,
+invocations and applications with canonical paths and content hashes. It does not
+automatically measure usage or establish successful application.
+
 ```bash
 # Log a route, natural form, straight from the declared routing line
 cortex log-line "OMC > ralplan > Backend Architect @ L3" "refactor auth middleware" \
@@ -300,7 +311,7 @@ cortex log-line "OMC > ralplan > Backend Architect @ L3" "refactor auth middlewa
 
 # What happened last time on something like this?
 cortex hint "refactor the session store" --class build
-cortex hint "..." --min-similarity 0.05 --top 10     # widen the net
+cortex hint "..." --top 10                         # retrieve more distinct routes
 
 # Optional Jev pilot, no network or experiment writes in off mode
 cortex advise "build a small API endpoint" --mode off --json
