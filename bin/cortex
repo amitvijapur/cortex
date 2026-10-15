@@ -1360,6 +1360,38 @@ def check_advisors(issues, deep=False):
             "the providers actually answer a prompt")
 
 
+def doctor_cli_references(content):
+    """Extract documented filesystem references without interpreting shell text."""
+    references = []
+
+    def preserve_quoted_path(match):
+        value = match.group(2)
+        if value.startswith(("/", "~/", "$HOME/", "${HOME}/")) and value.endswith("/bin/cortex"):
+            references.append(value)
+            # Do not let the unquoted scan mistake a literal path suffix for
+            # another reference after spaces or shell/Markdown punctuation.
+            return " "
+        return match.group(0)
+
+    # Start only at a filesystem prefix so prose apostrophes cannot consume
+    # a later path's opening quote. Stop at the first matching quote on the line.
+    local_content = re.sub(
+        r'''(["'])((?:/|~/|\$HOME/|\$\{HOME\}/)[^\r\n]*?)\1''',
+        preserve_quoted_path, content)
+    # Ignore source URLs without swallowing adjacent Markdown/table paths
+    # or shell commands. Keep IPv6 hosts, balanced URL parentheses and
+    # query/parameter separators unless they introduce an explicit path.
+    local_content = re.sub(
+        r'\b[A-Za-z][A-Za-z0-9+.-]*://(?:\[[0-9A-Fa-f:.]+\]|'
+        r'\([^()\s`\"\'<>]*\)|'
+        r'(?![;&]+(?:~|\$HOME|\$\{HOME\}|/))[^\s`\"\'<>()[\]|])+',
+        ' ', local_content)
+    references.extend(re.findall(
+        r'(?:~|\$HOME|\$\{HOME\}|/[^\s`\"\'<>()[\];|&]*)/[^\s`\"\'<>()[\];|&]*?/bin/cortex\b',
+        local_content))
+    return sorted(set(references))
+
+
 def check_personal_skills(issues):
     """Inspect every active personal surface, not just the Claude installation."""
     codex = Path(os.environ.get("CODEX_DIR") or os.environ.get("CODEX_HOME")
@@ -1393,10 +1425,7 @@ def check_personal_skills(issues):
             issues["pass"].append(f"personal skill inspected: {path}")
             # Match explicit home/absolute CLI references, including the audited
             # case-sensitive ~/.Codex typo. Do not execute skill instructions.
-            references = re.findall(
-                r'(?:~|\$HOME|\$\{HOME\}|/[^\s`\"\'<>]*)/[^\s`\"\'<>]*?/bin/cortex\b',
-                content)
-            for reference in sorted(set(references)):
+            for reference in doctor_cli_references(content):
                 expanded = reference.replace("${HOME}", str(Path.home())).replace("$HOME", str(Path.home()))
                 cli = Path(expanded).expanduser()
                 if not cli.is_file():

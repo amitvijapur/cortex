@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import codex_transcripts as C
 import derive_outcomes as D
@@ -47,6 +48,7 @@ class CodexAttribution(unittest.TestCase):
         self.root = Path(temp.name)
         self.codex = self.root / 'sessions'
         self.codex.mkdir()
+        self.enterContext(patch('subprocess.run', side_effect=AssertionError('unexpected process')))
 
     def write(self, rows, name='rollout.jsonl'):
         path = self.codex / name
@@ -150,6 +152,27 @@ class CodexAttribution(unittest.TestCase):
         self.assertNotIn(D.task_hash('fake'), index)
         self.assertIn(D.task_hash('cortex hint fake'), index)
         self.assertIsNone(C.command_task("cortex log --task 'cortex hint fake'", 'hint'))
+
+    def test_commands_only_quoted_revert_never_becomes_orphan_failure(self):
+        self.write([meta(), command("cortex hint 'explain git revert behavior' --class research",
+                                   ident='hint', at=BASE+5000), command(LOG)])
+        sessions, diagnostics = self.load()
+        self.assertEqual(diagnostics['codex']['accepted_commands'], 2)
+        index, times = D.build_anchor_index(sessions)
+        record = D.derive(route(), sessions, index, times, [route()], False)
+        self.assertEqual(record['derived_state'], 'unknown')
+        self.assertEqual(record['signals'], [])
+        self.assertIsNone(record['effort'])
+        self.assertEqual(D.orphan_evidence(sessions, times, [record]), [])
+        self.assertEqual(D.orphan_evidence(sessions, times, []), [])
+        log = self.root / 'routes.jsonl'
+        log.write_text(json.dumps(route()) + '\n')
+        out = self.root / 'derived.jsonl'
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(D.main(['--log', str(log), '--projects', str(self.root / 'missing'),
+                '--codex-sessions', str(self.codex), '--out', str(out), '--no-git']), 0)
+        report = [json.loads(line) for line in out.read_text().splitlines()]
+        self.assertFalse(any(row.get('kind') == 'orphan_evidence' for row in report))
 
     def test_duplicate_copies_deduplicate_and_conflicts_remove_evidence(self):
         rows = [meta(), command(LOG)]

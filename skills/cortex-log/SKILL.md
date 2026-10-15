@@ -6,7 +6,7 @@ trigger: /cortex-log
 
 # /cortex-log
 
-Show the last N Cortex routing decisions from `~/.claude/cortex-log.jsonl` with full reasoning.
+Show the last N Cortex routing decisions from the active state's `cortex-log.jsonl` with full reasoning.
 
 ## When to invoke
 
@@ -20,8 +20,13 @@ Show the last N Cortex routing decisions from `~/.claude/cortex-log.jsonl` with 
 
 Run the `cortex show` command and print its output verbatim. Nothing else.
 
+Resolve the state directory from `CORTEX_HOME`, then `CLAUDE_DIR`, then
+`$HOME/.claude`, matching the CLI and installer. Keep a custom override exported
+in the agent's environment.
+
 ```bash
-python3 ~/.claude/bin/cortex show --last 20
+cortex_state_dir="${CORTEX_HOME:-${CLAUDE_DIR:-$HOME/.claude}}"
+python3 "$cortex_state_dir/bin/cortex" show --last 20
 ```
 
 Optional args:

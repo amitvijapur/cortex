@@ -301,7 +301,12 @@ def hint_check(row, attribution, sessions, anchor_times):
         if (not D.successful_command(event) or not hint_queries(event.cmd)
                 or TEST_HARNESS_RE.search(event.cmd)):
             continue
-        if ((event.completed_at > anchor and event.ts != anchor)
+        # Timestamp equality does not establish ordering for parallel tool calls.
+        # Only a chain declaring this route can count as ran without completing
+        # before the anchor; such a pre-composed chain still cannot inform it.
+        declares_this_route = event.ts == anchor and any(
+            D.task_hash(task) == row.get('task_hash') for task in D.anchor_tasks(event.cmd))
+        if ((event.completed_at >= anchor and not declares_this_route)
                 or (lower is not None and event.ts <= lower)):
             continue
         hits.append(event)
@@ -364,8 +369,7 @@ def outcome_command_lag(sessions, attribution):
     for event in sessions[session_id]["events"]:
         if event.kind != "tool_use" or not event.cmd:
             continue
-        if not D.successful_command(event) or not any(
-                D.OUTCOME_RE.search(command) for command in D.cortex_commands(event.cmd)):
+        if not D.successful_command(event) or not D.outcome_commands(event.cmd):
             continue
         if start <= event.ts <= (end or event.ts):
             return round((event.ts - start).total_seconds() / 60, 1)

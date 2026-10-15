@@ -13,6 +13,7 @@ Run these steps in order.
 
 Resolve paths once and use these same values throughout setup. State precedence is
 `CORTEX_HOME`, then `CLAUDE_DIR`, then `$HOME/.claude`, matching the CLI and installer.
+Keep a custom override exported in the agent's environment for later skill calls.
 The executable is installed under that state directory. Keep paths quoted so custom
 directories containing spaces work. Run the scanner:
 

@@ -27,6 +27,9 @@ class IsolatedTest(unittest.TestCase):
                     'PYTHONDONTWRITEBYTECODE': '1'}
         self.env.pop('CORTEX_HOME', None)
         self.env.pop('CODEX_HOME', None)
+        self.env.pop('CORTEX_OBSIDIAN_ROOT', None)
+        self.env.pop('CORTEX_REPO', None)
+        self.env['CORTEX_SESSION_ID'] = 'isolated-install-fixture'
 
     def run_command(self, *args):
         return subprocess.run(args, env=self.env, cwd=self.root,
@@ -36,6 +39,212 @@ class IsolatedTest(unittest.TestCase):
 class InstallerTests(IsolatedTest):
     def install(self):
         return self.run_command('bash', str(ROOT / 'install.sh'))
+
+    def test_installed_commands_resolve_default_and_custom_roots(self):
+        for mode in ('default', 'empty', 'claude', 'cortex', 'both'):
+            with self.subTest(mode=mode):
+                home = self.root / mode / 'home with spaces'
+                home.mkdir(parents=True)
+                self.env.update(HOME=str(home), CODEX_DIR=str(home / '.codex'))
+                self.env.pop('CORTEX_HOME', None)
+                self.env.pop('CLAUDE_DIR', None)
+                state = home / '.claude'
+                if mode == 'empty':
+                    self.env.update(CORTEX_HOME='', CLAUDE_DIR='')
+                if mode in ('claude', 'both'):
+                    state = home / 'claude state'
+                    self.env['CLAUDE_DIR'] = str(state)
+                if mode in ('cortex', 'both'):
+                    state = home / 'cortex state'
+                    self.env['CORTEX_HOME'] = str(state)
+                (home / '.codex').mkdir()
+                (home / '.agents').mkdir()
+                result = self.install()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                roots = (state / 'skills', home / '.codex/skills', home / '.agents/skills')
+                for root in roots:
+                    for name in ('cortex-log', 'cortex-learn', 'cortex-reroute'):
+                        with self.subTest(surface=root, skill=name):
+                            path = root / name / 'SKILL.md'
+                            self.assertEqual(path.read_bytes(), (ROOT / 'skills' / name / 'SKILL.md').read_bytes())
+                            blocks = re.findall(r'```bash\n(.*?)\n```', path.read_text(), re.S)
+                            if name == 'cortex-reroute':
+                                values = {'<same task as before>': 'fixture task', '<class>': 'build',
+                                          '<new system>': 'Direct', '<new pattern>': 'fixture',
+                                          '<new agent>': 'Fixture', '<new tier>': 'L2',
+                                          '<...>': 'fixture', '<old route>': 'Direct > old @ L2'}
+                                command = blocks[1]
+                                for placeholder, value in values.items():
+                                    command = command.replace(placeholder, value)
+                                result = self.run_command('bash', '-c', command)
+                                self.assertEqual(result.returncode, 0, result.stderr)
+                            command = blocks[0].replace('<the route the user wanted>', 'Direct > revised @ L2')
+                            result = self.run_command('bash', '-c', command)
+                            self.assertEqual(result.returncode, 0, result.stderr)
+                            if name == 'cortex-reroute':
+                                rows = [json.loads(line) for line in (state / 'cortex-log.jsonl').read_text().splitlines()]
+                                self.assertEqual(rows[-1]['event'], 'reroute')
+                                self.assertEqual(rows[-1]['ref'], rows[-2]['event_id'])
+                init = state / 'skills/cortex-init/SKILL.md'
+                scan = re.findall(r'```bash\n(.*?)\n```', init.read_text(), re.S)[0]
+                result = self.run_command('bash', '-c', scan)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue((state / 'cortex-inventory.json').is_file())
+                result = self.run_command(sys.executable, str(state / 'bin/cortex'), 'doctor', '--no-probe')
+                self.assertNotIn('invalid CLI reference', result.stdout)
+                before = {p: p.read_bytes() for root in roots for p in root.rglob('*') if p.is_file()}
+                log = (state / 'cortex-log.jsonl').read_bytes()
+                self.assertEqual(self.install().returncode, 0)
+                self.assertEqual(before, {p: p.read_bytes() for root in roots for p in root.rglob('*') if p.is_file()})
+                self.assertEqual(log, (state / 'cortex-log.jsonl').read_bytes())
+                if mode in ('claude', 'cortex', 'both'):
+                    self.assertFalse((home / '.claude').exists())
+                if mode == 'both':
+                    self.assertFalse(Path(self.env['CLAUDE_DIR']).exists())
+
+    def test_doctor_ignores_urls_but_checks_real_cli_paths(self):
+        self.env.pop('CLAUDE_DIR')
+        self.assertEqual(self.install().returncode, 0)
+        state = self.home / '.claude'
+        skill = state / 'skills/cortex-log/SKILL.md'
+        original = skill.read_text()
+        urls = ('https://github.com/amitvijapur/cortex/blob/main/bin/cortex',
+                'http://example.com/source/bin/cortex', 'file:///source/bin/cortex',
+                'https://[::1]/source/bin/cortex',
+                'https://example.com/source(v1)/bin/cortex',
+                'https://example.com/source;version=1/bin/cortex',
+                'https://example.com/?first=1&next=/source/bin/cortex')
+        valid = ('~/.claude/bin/cortex', '$HOME/.claude/bin/cortex',
+                 '${HOME}/.claude/bin/cortex', str(state / 'bin/cortex'))
+        broken = ('~/.Codex/bin/cortex', '$HOME/missing/bin/cortex',
+                  '${HOME}/missing/bin/cortex', str(self.root / 'missing/bin/cortex'))
+        for reference in (*valid, *broken):
+            with self.subTest(reference=reference):
+                skill.write_text(original + '\n' + '\n'.join(f'[source]({url})' for url in urls)
+                                 + f'\npython3 {reference} show\n')
+                result = self.run_command(sys.executable, str(state / 'bin/cortex'),
+                                          'doctor', '--no-probe', '-v')
+                failures = [line for line in result.stdout.splitlines() if 'invalid CLI reference' in line]
+                self.assertEqual(len(failures), int(reference in broken), result.stdout)
+                if reference in broken:
+                    self.assertIn(reference, failures[0])
+
+    def test_doctor_checks_adjacent_url_and_local_references(self):
+        self.env.pop('CLAUDE_DIR')
+        self.assertEqual(self.install().returncode, 0)
+        state = self.home / '.claude'
+        skill = state / 'skills/cortex-log/SKILL.md'
+        original = skill.read_text()
+        url = 'https://example.com/bin/cortex'
+        valid = ('~/.claude/bin/cortex', '$HOME/.claude/bin/cortex',
+                 '${HOME}/.claude/bin/cortex', str(state / 'bin/cortex'))
+        broken = ('~/.Codex/bin/cortex', '$HOME/missing/bin/cortex',
+                  '${HOME}/missing/bin/cortex', str(self.root / 'missing/bin/cortex'))
+        layouts = ('curl {url};{reference} show',
+                   'curl {url}&&{reference} show',
+                   'curl {url}&{reference} show',
+                   'curl {url}|{reference} show',
+                   'curl {url}||{reference} show',
+                   '[source]({url})[local]({reference})',
+                   '[local]({reference})[source]({url})',
+                   '|{url}|{reference}|',
+                   '|{reference}|{url}|',
+                   'curl {url};{installed};{reference} show',
+                   '[source]({url})[installed]({installed})[local]({reference})')
+        for reference in (*valid, *broken):
+            for layout in layouts:
+                with self.subTest(reference=reference, layout=layout):
+                    # These commands are only text inspected by Doctor, never executed.
+                    skill.write_text(original + '\n' + layout.format(
+                        url=url, installed=state / 'bin/cortex', reference=reference) + '\n')
+                    result = self.run_command(sys.executable, str(state / 'bin/cortex'),
+                                              'doctor', '--no-probe', '-v')
+                    failures = [line for line in result.stdout.splitlines()
+                                if 'invalid CLI reference' in line]
+                    self.assertEqual(len(failures), int(reference in broken), result.stdout)
+                    if reference in broken:
+                        self.assertIn(f': {reference} (missing target ', failures[0])
+
+    def test_doctor_preserves_quoted_literal_cli_paths(self):
+        self.env.pop('CLAUDE_DIR')
+        self.assertEqual(self.install().returncode, 0)
+        state = self.home / '.claude'
+        skill = state / 'skills/cortex-log/SKILL.md'
+        original = skill.read_text()
+        names = ('fixture space', 'fixture(v1)', 'fixture&test',
+                 'fixture;test', 'fixture[test]', 'fixture (v1)&test;[1]/nested')
+        url = 'https://example.com/source(v1);version=1/bin/cortex'
+        for name in names:
+            existing = self.home / name / 'bin/cortex'
+            existing.parent.mkdir(parents=True)
+            existing.touch()
+            missing = self.home / 'missing' / name / 'bin/cortex'
+            for target in (existing, missing):
+                suffix = target.relative_to(self.home).as_posix()
+                references = (str(target), f'~/{suffix}',
+                              f'$HOME/{suffix}', f'${{HOME}}/{suffix}')
+                for reference in references:
+                    for quote in ('"', "'"):
+                        with self.subTest(reference=reference, quote=quote):
+                            # Literal fixture text is inspected, never shell-executed.
+                            skill.write_text(original + '\n'
+                                             + f'curl {quote}{url}{quote};python3 '
+                                             + f'{quote}{reference}{quote} show\n'
+                                             + f'[local]({state / "bin/cortex"})[source]({url})\n')
+                            result = self.run_command(sys.executable, str(state / 'bin/cortex'),
+                                                      'doctor', '--no-probe', '-v')
+                            failures = [line for line in result.stdout.splitlines()
+                                        if 'invalid CLI reference' in line]
+                            self.assertEqual(result.returncode, int(target == missing),
+                                             result.stdout + result.stderr)
+                            self.assertEqual(len(failures), int(target == missing), result.stdout)
+                            if target == missing:
+                                self.assertIn(f': {reference} (missing target {target})', failures[0])
+
+    def test_doctor_preserves_quoted_paths_after_prose_apostrophe(self):
+        self.env.pop('CLAUDE_DIR')
+        self.assertEqual(self.install().returncode, 0)
+        state = self.home / '.claude'
+        skill = state / 'skills/cortex-log/SKILL.md'
+        original = skill.read_text()
+        existing = self.home / 'existing&test' / 'bin/cortex'
+        existing.parent.mkdir(parents=True)
+        existing.touch()
+        missing = self.home / 'missing&test' / 'bin/cortex'
+        for target in (existing, missing):
+            suffix = target.relative_to(self.home).as_posix()
+            references = (str(target), f'~/{suffix}',
+                          f'$HOME/{suffix}', f'${{HOME}}/{suffix}')
+            for reference in references:
+                for quote in ('"', "'"):
+                    with self.subTest(reference=reference, quote=quote):
+                        # Prose apostrophes must not consume a later path opener.
+                        skill.write_text(original + '\n'
+                                         + f"Don't run python3 {quote}{reference}{quote} show\n")
+                        result = self.run_command(sys.executable, str(state / 'bin/cortex'),
+                                                  'doctor', '--no-probe', '-v')
+                        failures = [line for line in result.stdout.splitlines()
+                                    if 'invalid CLI reference' in line]
+                        self.assertEqual(result.returncode, int(target == missing),
+                                         result.stdout + result.stderr)
+                        self.assertEqual(len(failures), int(target == missing), result.stdout)
+                        if target == missing:
+                            self.assertIn(f': {reference} (missing target {target})', failures[0])
+
+    def test_installer_prints_runnable_custom_root_commands(self):
+        state = self.root / "custom root's state"
+        self.env['CORTEX_HOME'] = str(state)
+        result = self.install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        command = next(line.strip() for line in result.stdout.splitlines()
+                       if line.strip().endswith(' doctor'))
+        # A one-shot installer override is not present in the next shell.
+        self.env.pop('CORTEX_HOME')
+        self.env.pop('CLAUDE_DIR')
+        result = self.run_command('bash', '-c', command + ' --no-probe -v')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(f'cortex.md present: {state / "cortex.md"}', result.stdout)
+        self.assertFalse((self.home / '.claude').exists())
 
     def test_installed_skill_use_imports_packaged_helper_and_keeps_streams_separate(self):
         self.env.update(CORTEX_HOST='codex', CORTEX_SESSION_ID='installed-fixture')
