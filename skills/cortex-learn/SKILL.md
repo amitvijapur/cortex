@@ -35,9 +35,11 @@ For each detected pattern, the tool writes a markdown proposal file with frontma
 
 1. Read each proposal
 2. Decide: approve, modify, or reject
-3. Edit the proposal frontmatter to reflect the decision
-4. If approved: add the candidate shortcut to `cortex.md` → Decision Shortcuts table
-5. If rejected: write a one-line reason in the Notes section
+3. If rejected: persist `status: rejected` in that exact proposal's YAML frontmatter and write a one-line reason in Notes. A checkbox or a chat acknowledgement alone does not persist the decision.
+4. If approved (including an approved modification): add the agreed shortcut to `cortex.md` → Decision Shortcuts table, then persist `status: approved` in the proposal. Keep `class`, `system`, and `pattern` as the original detection identity; put approved changes in the candidate row and Notes.
+5. Read back the edited file before confirming the decision. If the write fails, report that it was not saved. Do not claim suppression based only on the user's reply.
+
+Approved, rejected and superseded tuples are excluded from ordinary future suggestions, even if their counts grow. `cortex learn --include-actioned` explicitly includes them again. Do not promise automatic reconsideration on growth. With `--no-proposals`, report only; there is no proposal decision to persist unless the user requests one.
 
 ### Step 3 — Update cortex.md (only if approved)
 

@@ -1,174 +1,31 @@
 #!/usr/bin/env python3
 """score_adherence — per-step conformance to the Cortex routing protocol.
 
-WHAT THIS MEASURES
-    For each step of the protocol in ~/.claude/cortex.md — hint, declare, tier, agent,
-    confidence, outcome — how often the step was actually performed. Every number is a
-    ratio whose numerator and denominator are named in the output, together with what was
-    excluded from the denominator and why.
+Log metrics measure named protocol fields, not routing quality or work success.
+Transcript metrics use only anchor-attributed routes from the Claude reader shared
+with derive_outcomes. Other hosts, missing transcripts, ambiguous joins and
+session-ref-only windows are unmeasurable for these metrics, not failed adherence.
+Opt-in Codex command attribution is reported separately, never as missing adherence.
 
-WHAT IT DOES NOT MEASURE
-    Whether routing *worked*. A perfectly adhered-to route can be the wrong route, and a
-    skipped protocol can precede excellent work. This file scores ceremony, not outcomes.
-    derive_outcomes.py is the file that looks for evidence about how routes went, and it
-    is deliberately kept separate.
+Every report derives date coverage and host/period denominators from its inputs.
+Unknown recorded hosts stay unknown, even when transcript evidence is available.
+Observed date bounds do not imply continuous retention. No fixed historical month
+range describes a current run.
 
-    It also does not measure whether a skip was *correct*. The protocol permits skipping
-    trivial work, and nothing in the artifacts records "I judged this trivial". A session
-    with no route is either a legitimate skip or a protocol miss and this file cannot tell
-    them apart. That is the whole reason the coverage metric is banded rather than scored.
+Session coverage is a substantiveness ladder, not a single compliance rate.
+Observation provenance is absence of detected ceremony, not a verified outcome.
+Neither result certifies success. Floors apply only to their named denominators;
+no coverage floor checks missing hosts or periods. An unmeasurable configured
+floor makes the gate incomplete and returns nonzero, never an implicit pass.
 
-THE DENOMINATOR PROBLEM, AND HOW IT IS HANDLED
-    Two of these questions have clean denominators and one does not.
-
-    Clean — "given that a route was declared, was the rest of the ceremony performed?"
-    The denominator is the set of logged routes. Nothing is conditioned on the behaviour
-    being measured, because declaring the route and (say) naming an agent are separate
-    acts. These are reported as `measured`.
-
-    Also clean, with a stated coverage caveat — "was `hint` run before this route?" The
-    denominator is the set of routes whose creating command was found in a transcript.
-    That is a *subset* of routes, and a biased one (see COVERAGE below), so the metric is
-    reported as `measured` over an explicitly named subset, never over the whole log.
-
-    Not clean — "did substantive sessions route at all?" The denominator is the set of
-    sessions where the protocol *should* have applied, which is exactly the thing nobody
-    recorded. "All sessions" is far too wide: the Skip protocol makes many sessions
-    legitimately route-free. "Sessions that logged a route" is circular. So this one is
-    reported as `banded`: a ladder of increasingly strict substantiveness thresholds, each
-    with its own measured ratio, and the band is the span between the loosest and the
-    strictest. Both endpoints are facts; the assumption is only that the truth lies
-    between them, and the assumption that would break each endpoint is printed with it.
-
-    A metric that is neither measured nor honestly bandable is dropped. `dropped` metrics
-    are listed in the output with the reason, so that dropping is visible rather than
-    silent.
-
-COVERAGE — the limit that governs every transcript-derived number
-    A route is joined to a transcript by the same mechanism derive_outcomes.py uses, and
-    that module is imported rather than reimplemented so the two files cannot disagree
-    about which window belongs to which route. The join finds the `cortex log-line` shell
-    command that created the row.
-
-    That join is heavily time-biased, and the bias is not subtle:
-
-        2026-04   32 rows    0 attributable   (0%)
-        2026-05    7 rows    1 attributable  (14%)
-        2026-06    5 rows    0 attributable   (0%)
-        2026-07   85 rows   71 attributable  (84%)
-        2026-08   14 rows   12 attributable  (86%)
-
-    Transcripts older than July have been pruned — the whole of April survives as 33
-    events. So every transcript-derived number here is a statement about July and August
-    2026, not about the log's history, and it is reported that way. The 44 pre-July rows
-    are not scored on those metrics and are excluded as not measurable, not counted as
-    failures.
-
-    `session_ref` — the field that makes this join exact — exists on 3 of 144 rows. It is
-    used when present and contributes essentially nothing today. No historical row is
-    given an attribution it cannot support.
-
-WHAT IT FOUND, 2026-08-06, over 143 route rows and 154 transcript sessions
-    One row was excluded before scoring: the log has gained an event-typed schema and now
-    carries an `event: "outcome"` row that is not a route. Scoring it would have invented
-    five violations out of a schema change.
-
-    Measured, log-only (denominator = all 143 route rows unless stated):
-
-        tier_declared                 143/143 100.0%
-        confidence_declared           106/107  99.1%  (denominator starts at the first row
-                                                        carrying the field; 36 earlier rows
-                                                        excluded — the field did not exist)
-        outcome_recorded              128/143  89.5%
-        agent_field_populated          93/143  65.0%  → 73/86 (84.9%) excluding `Direct`
-                                                        rows, which have no agent by
-                                                        design. At least 9 more name an
-                                                        agent inside `pattern`, which the
-                                                        parser folds on fan-out lines, so
-                                                        even 84.9% understates.
-        outcome_recorded_live          90/143  62.9%  (excludes 38 bulk-backfilled)
-
-    Measured, transcript-derived (denominator = the 84 anchor-attributed routes, which are
-    effectively all July-August):
-
-        outcome_is_observation         55/71   77.5%  of routes carrying an outcome, the
-                                                        share with no evidence the label
-                                                        was ceremony. 51 of those 55 have
-                                                        a `cortex outcome` command inside
-                                                        their own window at a median 11
-                                                        minutes after declaration.
-        hint_before_route              24/84   28.6%
-        hint_could_inform_route        19/84   22.6%  5 of the 24 ran `hint` inside the
-                                                        same shell command as the
-                                                        declaration, where the routing line
-                                                        was already written.
-
-    The hint result is the one worth dwelling on, because framing moves it by 2x. Read per
-    session — did this session ever run hint — the same corpus gives 16/25 = 64%, which
-    reproduces an earlier hand-count of transcripts almost exactly. Read per route, as
-    protocol step 3 is written, it is 28.6%. The difference is 42 routes declared after a
-    hint that was run for an *earlier* task in the same session. Neither number is wrong;
-    quoting either without saying which is.
-
-    Banded — did substantive sessions route at all?
-
-        >=1 turn                       27/46   58.7%
-        >=2 turns                      27/44   61.4%
-        >=3 turns, >=1 write           26/34   76.5%
-        >=5 turns, >=3 writes          20/27   74.1%
-        >=8 turns, >=5 writes          19/23   82.6%
-
-        Band: 59%–83%, after excluding 108 sessions that were not Amit talking to Claude
-        — intake workers, the weekly scout, hook-spawned security reviewers, the eval
-        harness's own replay probes, the Almanac bot. That exclusion is the difference
-        between a defensible band and a fiction: leaving those in produces a floor of 22%,
-        which measures how many robots failed to route.
-
-        Hand-adjudicated for calibration, not as a metric: of the 19 eligible sessions
-        with no route, roughly 8 look like genuine misses (a folder audit over 38 turns, a
-        Telegram bot build, two multi-turn debugging sessions, a client quote rebuild),
-        roughly 9 look like correct skips under the Skip protocol (resume a session, pull
-        a repo, open a file, place a note), and 2 are arguable. That puts a hand-judged
-        point estimate near 71-77%, inside the band. The band is the reportable result;
-        the point estimate is one person's reading of 19 sessions.
-
-    The shape matters more than any single figure. The ceremony *inside* a declared route
-    is near-total (tier 100%, confidence 99%). The step *before* the route — the advisory
-    hint that is supposed to inform the choice — is performed on under a third of routes.
-    Adherence is not one number and must never be reported as one.
-
-WHAT IS SAFE TO GATE ON LATER
-    Thresholds are Amit's to set and none are set here. But the metrics differ in whether
-    they *could* carry a gate at all, and that is a property of the measurement:
-
-    Gateable. Denominator is exact, the input is the log alone, and the number cannot move
-    because a transcript was pruned or a session was misclassified:
-        tier_declared, outcome_recorded, outcome_recorded_live, confidence_declared.
-
-    Gateable with the coverage caveat attached. Denominator is exact over the attributed
-    subset, and the classification is a string being present or absent in a preserved shell
-    command — the same precision derive_outcomes hand-checked at 15/15. Safe to gate as
-    long as the gate is understood to cover recent routes only, and as long as a drop in
-    the *attribution rate* is not read as a drop in adherence:
-        hint_before_route, hint_could_inform_route, outcome_is_observation.
-
-    Indicative only, never gate:
-        agent_field_populated — checks a field, and the field is knowably wrong on fan-out
-            lines where the parser folds the agent into `pattern`.
-        hint_query_matched_task — depends on a similarity threshold that is a knob.
-        session_routed — has no single value by construction. A gate would be a gate on a
-            chosen threshold, which is the false precision this file exists to avoid.
-
-READ-ONLY
-    Reads the cortex log, the transcripts, and nothing else. Writes exactly one file under
-    the state dir. It never writes to the cortex log and never touches a transcript.
+Reads the log and retained transcripts. Writes only the requested output report
+unless --dry-run is used. Does not invoke models or modify source evidence.
 """
 import argparse
 import json
 import os
 import re
 import sys
-from importlib.machinery import SourceFileLoader
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -405,12 +262,9 @@ def log_metrics(rows):
 # ---------------------------------------------------------------------------
 def hint_queries(command):
     """Every task string passed to `cortex hint` in one shell command."""
-    out = []
-    for match in HINT_RE.finditer(command):
-        parts = D.split_args(command[match.end():])
-        if parts and not parts[0].startswith("-"):
-            out.append(parts[0])
-    return out
+    from codex_transcripts import command_task
+    return [task for invocation in D.cortex_commands(command)
+            if (task := command_task(invocation, 'hint')) is not None]
 
 
 def hint_check(row, attribution, sessions, anchor_times):
@@ -432,6 +286,10 @@ def hint_check(row, attribution, sessions, anchor_times):
         return None
     if not session_id or anchor is None:
         return None
+    if sessions[session_id].get('evidence_scope') == 'commands-only':
+        # A missing parsed command is not proof that Codex skipped hint. Keep
+        # this partial adapter out of full-transcript positive/negative gates.
+        return None
 
     earlier = [t for t in anchor_times.get(session_id, []) if t < anchor]
     lower = max(earlier) if earlier else None
@@ -440,9 +298,11 @@ def hint_check(row, attribution, sessions, anchor_times):
     for event in sessions[session_id]["events"]:
         if event.kind != "tool_use" or not event.cmd:
             continue
-        if "cortex hint" not in event.cmd or TEST_HARNESS_RE.search(event.cmd):
+        if (not D.successful_command(event) or not hint_queries(event.cmd)
+                or TEST_HARNESS_RE.search(event.cmd)):
             continue
-        if event.ts > anchor or (lower is not None and event.ts <= lower):
+        if ((event.completed_at > anchor and event.ts != anchor)
+                or (lower is not None and event.ts <= lower)):
             continue
         hits.append(event)
 
@@ -450,8 +310,9 @@ def hint_check(row, attribution, sessions, anchor_times):
     # not compliance for *this* route, but it is what a session-level reading counts, and
     # recording it is what lets the two readings be reconciled instead of argued about.
     earlier_in_session = any(
-        event.kind == "tool_use" and event.cmd and "cortex hint" in event.cmd
-        and not TEST_HARNESS_RE.search(event.cmd) and event.ts < anchor
+        event.kind == "tool_use" and event.cmd and D.successful_command(event)
+        and hint_queries(event.cmd) and not TEST_HARNESS_RE.search(event.cmd)
+        and event.completed_at < anchor
         for event in sessions[session_id]["events"])
 
     if not hits:
@@ -463,7 +324,7 @@ def hint_check(row, attribution, sessions, anchor_times):
     # the declaration: the routing line was already written when the command was composed.
     # Same argument, and same precision, as derive_outcomes' outcome_stamped_at_declaration
     # — a string either is or is not present in a preserved command.
-    same_command = [e for e in hits if "cortex log" in e.cmd]
+    same_command = [e for e in hits if D.anchor_tasks(e.cmd)]
     could_inform = len(same_command) < len(hits)
 
     task = row.get("task") or ""
@@ -477,7 +338,7 @@ def hint_check(row, attribution, sessions, anchor_times):
             for q in queries)
         matched = "exact" if exact else ("overlap" if overlap else "unrelated")
 
-    chosen = next((e for e in hits if "cortex log" not in e.cmd), hits[0])
+    chosen = next((e for e in hits if not D.anchor_tasks(e.cmd)), hits[0])
     index = HINT_RE.search(chosen.cmd)
     return {"ran": True, "could_inform": could_inform, "query_matched": matched,
             "earlier_in_session": True, "queries": queries[:3],
@@ -503,7 +364,8 @@ def outcome_command_lag(sessions, attribution):
     for event in sessions[session_id]["events"]:
         if event.kind != "tool_use" or not event.cmd:
             continue
-        if not D.OUTCOME_RE.search(event.cmd):
+        if not D.successful_command(event) or not any(
+                D.OUTCOME_RE.search(command) for command in D.cortex_commands(event.cmd)):
             continue
         if start <= event.ts <= (end or event.ts):
             return round((event.ts - start).total_seconds() / 60, 1)
@@ -513,8 +375,9 @@ def outcome_command_lag(sessions, attribution):
 def outcome_provenance(row, sessions, attribution):
     """Classify how this route's recorded outcome came to exist.
 
-    Four buckets, in order of how much the label can be trusted:
+    Buckets distinguish absent labels from unavailable transcript evidence:
       none        — no outcome recorded at all
+      unknown     — an outcome exists but lacks supported anchor evidence
       backfilled  — the row says it was assigned in the bulk sweep
       ceremony    — derive_outcomes found the outcome stamped within 90s of the route's
                     own declaration, or batched into the shell command that declared the
@@ -528,6 +391,9 @@ def outcome_provenance(row, sessions, attribution):
         return "none", []
     if row.get("outcome_backfilled"):
         return "backfilled", []
+    if (attribution.get('method') not in ('anchor-command', 'anchor-command+ts')
+            or sessions.get(attribution.get('session'), {}).get('evidence_scope') == 'commands-only'):
+        return "unknown", []
     findings = D.signal_label_provenance(row, sessions, attribution)
     if findings:
         return "ceremony", findings
@@ -566,8 +432,8 @@ def transcript_metrics(records):
              "transcripts reported. Both are correct answers to different questions. The "
              f"gap is {stale} routes that were declared after a hint run for an *earlier* "
              "task in the same session, which counts as compliance session-wide and as a "
-             "miss per route. Denominator is the anchor-attributed subset, effectively all "
-             "July-August 2026: pre-July transcripts are pruned, so pre-July routes are "
+             "miss per route. Denominator is only the anchor-attributed subset. See "
+             "evidence_coverage for this run's host and date bounds. Other routes are "
              "excluded as not measurable rather than counted as misses."))
     out.append(metric(
         "hint_could_inform_route", "measured",
@@ -637,9 +503,10 @@ def classify_session(session_id, bucket, first_route_ts, routed_sessions):
               and e.tool in ("Edit", "Write", "NotebookEdit")]
     opening = user_turns[0].text if user_turns else ""
 
-    exclusion = None
+    exclusion = ('Codex commands-only evidence; user turns and writes not measured'
+                 if bucket.get('evidence_scope') == 'commands-only' else None)
     for pattern, reason in AUTOMATION_PREAMBLES:
-        if re.search(pattern, opening):
+        if exclusion is None and re.search(pattern, opening):
             exclusion = reason
             break
     if exclusion is None:
@@ -707,9 +574,9 @@ def coverage_band(session_records):
                 "total_sessions_seen": len(session_records)},
         note="NOT a single figure and must not be quoted as one. Every rung is a measured "
              "ratio; the choice of rung is a judgement about where trivial ends, and "
-             "nothing in the artifacts records that judgement. Transcript pruning also "
-             "means this is a July-August picture: sessions before then largely no longer "
-             "exist to be counted, in either the numerator or the denominator.")
+             "nothing in the artifacts records that judgement. Only retained Claude "
+             "transcripts are counted. Missing sessions and unsupported hosts are unknown "
+             "in both numerator and denominator; date coverage is reported per run.")
 
 
 # ---------------------------------------------------------------------------
@@ -730,6 +597,8 @@ def ghost_declarations(sessions, anchor_index, rows):
         if digest in known:
             continue
         for session_id, ts, command in hits:
+            if sessions.get(session_id, {}).get('evidence_scope') == 'commands-only':
+                continue
             if TEST_HARNESS_RE.search(command):
                 continue
             index = re.search(r"cortex\s+log(-line)?\s+", command)
@@ -781,9 +650,9 @@ def build(rows, sessions, anchor_index, anchor_times):
     for row in rows:
         attribution = D.attribute(row, anchor_index, anchor_times, sessions)
         hint = hint_check(row, attribution, sessions, anchor_times)
-        provenance, findings, lag = ("none", [], None)
+        provenance, findings = outcome_provenance(row, sessions, attribution)
+        lag = None
         if hint is not None:
-            provenance, findings = outcome_provenance(row, sessions, attribution)
             lag = outcome_command_lag(sessions, attribution)
         records.append({
             "schema": SCHEMA_VERSION,
@@ -791,6 +660,7 @@ def build(rows, sessions, anchor_index, anchor_times):
             "event_id": row.get("event_id") or row.get("_id"),
             "task_hash": row.get("task_hash"),
             "route_ts": row.get("ts"),
+            "host": D.route_host(row),
             "project": row.get("project"),
             "class": row.get("class"),
             "tier": row.get("tier"),
@@ -798,8 +668,11 @@ def build(rows, sessions, anchor_index, anchor_times):
             "system": row.get("system"),
             "task": (row.get("task") or "")[:160],
             "attribution_method": attribution.get("method"),
+            "attribution": {k: (iso(v) if isinstance(v, datetime) else v)
+                            for k, v in attribution.items()},
             "session": attribution.get("session"),
             "hint": hint,
+            "codex_command_evidence": codex_command_evidence(attribution, sessions, anchor_times),
             "outcome": row.get("outcome"),
             "outcome_backfilled": bool(row.get("outcome_backfilled")),
             "outcome_provenance": provenance,
@@ -815,7 +688,7 @@ def build(rows, sessions, anchor_index, anchor_times):
             if not TEST_HARNESS_RE.search(command):
                 routed_sessions.add(session_id)
 
-    first_route = min((D.parse_ts(r.get("ts")) for r in rows if r.get("ts")),
+    first_route = min((ts for r in rows if (ts := D.parse_ts(r.get("ts"))) is not None),
                       default=datetime.now(timezone.utc))
     session_records = [classify_session(sid, bucket, first_route, routed_sessions)
                        for sid, bucket in sessions.items()]
@@ -828,7 +701,8 @@ def build(rows, sessions, anchor_index, anchor_times):
 
     coverage = Counter()
     for row, record in zip(rows, records):
-        month = (row.get("ts") or "")[:7]
+        stamp = D.parse_ts(row.get("ts"))
+        month = stamp.strftime("%Y-%m") if stamp else "unknown"
         coverage[month, bool(record["hint"] is not None)] += 1
     by_month = {}
     for (month, joined), count in coverage.items():
@@ -842,8 +716,31 @@ def build(rows, sessions, anchor_index, anchor_times):
     return records, session_records, metrics, by_month
 
 
+def codex_command_evidence(attribution, sessions, anchor_times):
+    """Positive command observations only, never an adherence denominator."""
+    sid = attribution.get('session')
+    bucket = sessions.get(sid, {})
+    if bucket.get('host') != 'codex':
+        return None
+    anchor = attribution.get('start')
+    if anchor is None:
+        return None
+    declaration_bound = attribution.get('anchor_started_at')
+    if declaration_bound is None:
+        return None
+    prior = [t for t in anchor_times.get(sid, []) if t < anchor]
+    lower = max(prior) if prior else None
+    from codex_transcripts import command_task
+    hits = [e for e in bucket['events'] if e.cmd and command_task(e.cmd, 'hint') is not None
+            and not TEST_HARNESS_RE.search(e.cmd)
+            and e.ts < declaration_bound and (lower is None or e.ts > lower)]
+    return {'hint_observed': True if hits else None,
+            'hint_completed_at': iso(hits[-1].ts) if hits else None,
+            'scope': 'positive command evidence only; absence is unknown'}
+
+
 def check_floors(metrics, thresholds_path):
-    """Enforce the adherence floors. Returns the number of breaches.
+    """Return the count of breached or unmeasurable configured floors.
 
     Floors catch regression. They are deliberately set below where the system sits, so a
     breach means something changed rather than that the current state is good — the
@@ -852,12 +749,14 @@ def check_floors(metrics, thresholds_path):
     """
     spec = json.loads(Path(thresholds_path).read_text())
     by_id = {m["id"]: m for m in metrics}
-    breaches, checked = [], 0
+    breaches, checked, unmeasured = [], 0, []
     print("\nADHERENCE GATE")
+    print(D.EVIDENCE_LIMITATION)
     for mid, rule in spec.get("floors", {}).items():
         m = by_id.get(mid)
         if not m or m.get("value") is None:
             print(f"  {mid:26s}    n/a  not measurable this run — NOT counted as a pass")
+            unmeasured.append(mid)
             continue
         checked += 1
         ok = m["value"] >= rule["min"]
@@ -871,20 +770,24 @@ def check_floors(metrics, thresholds_path):
             gap = rule["goal"] - m["value"]
             print(f"  {mid:26s} {m['value']:6.1%}  target {rule['goal']:.0%}   "
                   f"{'met' if gap <= 0 else f'{gap:+.0%} to go'}")
-    print(f"\n{checked} floor(s) checked, {len(breaches)} breached")
-    return len(breaches)
+    print(f"\n{checked} floor(s) checked, {len(breaches)} breached, "
+          f"{len(unmeasured)} unmeasurable")
+    print("Gate incomplete." if unmeasured else
+          "Gate applies to named denominators only, not whole-log evidence coverage.")
+    return len(breaches) + len(unmeasured)
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--log", default=str(LOG_PATH), help="cortex log to read (never written)")
-    parser.add_argument("--projects", default=str(PROJECTS_DIR), help="transcript root")
+    parser.add_argument("--projects", default=str(PROJECTS_DIR), help="Claude transcript root")
+    parser.add_argument("--codex-sessions", type=Path, help="opt-in local Codex rollout root, commands-only attribution")
     parser.add_argument("--out", default=str(DEFAULT_OUT), help="output JSONL")
     parser.add_argument("--summary", action="store_true", help="print a summary to stdout")
     parser.add_argument("--dry-run", action="store_true", help="score but write nothing")
     parser.add_argument("--check", action="store_true",
                         help="enforce the floors in adherence-thresholds.json and exit "
-                             "non-zero if any is breached. Floors detect regression; they "
+                             "non-zero if any is breached or unmeasurable. Floors detect regression; they "
                              "do not certify the current state as acceptable")
     parser.add_argument("--thresholds",
                         default=str(Path(__file__).resolve().parent / "adherence-thresholds.json"))
@@ -898,39 +801,16 @@ def main(argv=None):
     if not log_path.exists():
         print(f"no log at {log_path}", file=sys.stderr)
         return 1
-    raw = []
-    for line in log_path.read_text().splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            raw.append(json.loads(line))
-        except ValueError:
-            continue
-    rows = [r for r in raw if is_route(r)]
-    non_route_rows = len(raw) - len(rows)
-
-    # Fold correction events into the routes they reference, using bin/cortex's own
-    # collapse() rather than a second implementation of it.
-    #
-    # This is not cosmetic. The log became append-only after this scorer was written:
-    # an outcome is now recorded as a separate event carrying a `ref` to its route, not
-    # as a field on the route row. Reading raw rows therefore counted 128/154 outcomes
-    # while the CLI's derived view saw 138/154 — a 6.5-point gap that tripped the
-    # adherence floor for a reason that did not exist. Two views of one log disagreeing
-    # is the exact defect this project exists to remove, so there is one view.
     try:
-        _cli = SourceFileLoader("cortex_cli", str(REPO / "bin" / "cortex")).load_module()
-        # task_hash identifies text, not an execution. Keep each collapsed route's
-        # identity, timestamp and session together with its own corrections.
-        rows = [r for r in _cli.collapse(raw) if is_route(r)]
-    except Exception as exc:  # noqa: BLE001
-        print(f"  ! could not fold correction events ({exc}); outcome counts may be low",
-              file=sys.stderr)
+        rows, non_route_rows = D.load_route_log(log_path)
+    except Exception as exc:
+        print(f"could not load corrected route view: {exc}", file=sys.stderr)
+        return 1
 
-    sessions = D.load_sessions(Path(args.projects))
+    sessions, adapter_diagnostics = D.load_evidence_sessions(Path(args.projects), args.codex_sessions)
     anchor_index, anchor_times = D.build_anchor_index(sessions)
     records, session_records, metrics, by_month = build(rows, sessions, anchor_index, anchor_times)
+    coverage = D.evidence_coverage(rows, [rec["attribution"] for rec in records], sessions, adapter_diagnostics)
     ghosts = ghost_declarations(sessions, anchor_index, rows)
 
     header = {
@@ -941,15 +821,16 @@ def main(argv=None):
         "log_rows": len(rows),
         "non_route_rows_excluded": non_route_rows,
         "transcript_sessions": len(sessions),
+        "transcript_root": str(Path(args.projects)),
         "attribution_by_month": by_month,
+        "evidence_coverage": coverage,
         "metrics": metrics,
         "ghost_declarations": ghosts,
         "warning": "Adherence to protocol steps only. Says nothing about whether routing "
                    "was correct or whether the work succeeded. `measured` metrics have "
                    "named denominators; `banded` metrics do not have a single value and "
                    "must not be quoted as one; `dropped` metrics are listed with the "
-                   "reason they are absent. Transcript-derived metrics cover July-August "
-                   "2026 only, because earlier transcripts have been pruned.",
+                   "reason they are absent. " + D.EVIDENCE_LIMITATION,
     }
 
     if not args.dry_run:
@@ -969,6 +850,7 @@ def main(argv=None):
         show(args.show, records, session_records)
 
     if args.summary or args.dry_run:
+        D.print_evidence_coverage(coverage)
         summarise(metrics, by_month, ghosts, len(rows), len(sessions), non_route_rows)
     if args.check:
         breaches = check_floors(metrics, args.thresholds)
@@ -1018,7 +900,7 @@ def summarise(metrics, by_month, ghosts, rows, sessions, non_route_rows=0):
     print(f"\nroute rows          {rows}"
           + (f"  ({non_route_rows} non-route event row(s) excluded)" if non_route_rows else ""))
     print(f"transcript sessions {sessions}")
-    print("\ntranscript join coverage by month (governs every transcript-derived metric)")
+    print("\nfull-transcript metric coverage by month (Codex commands-only joins excluded)")
     for month in sorted(by_month):
         entry = by_month[month]
         print(f"  {month}  rows={entry['rows']:3d}  attributed={entry['attributed']:3d}  "

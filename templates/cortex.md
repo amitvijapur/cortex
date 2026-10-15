@@ -46,7 +46,7 @@ Confidence isn't one number — three dimensions matter independently, each with
 
 | Dimension | Question being answered | If `low` → auto-trigger |
 |-----------|-------------------------|--------------------------|
-| **`--route-confidence`** | Am I picking the right system + pattern? | Rerun `cortex hint` with a broader `--min-similarity 0.05`, or fire the multi-model council to cross-check |
+| **`--route-confidence`** | Am I picking the right system + pattern? | Remove optional similarity/tier filters or increase `--top`; council use requires capability and spend authorization |
 | **`--tier-confidence`** | Is this really L3, or could L2 have worked? | Flagged automatically for the next `cortex audit-tiers` review pass |
 | **`--spec-confidence`** | Do I actually understand what the user wants? | **Stop before executing** — run a clarifying interview first. This is the strongest auto-trigger |
 
@@ -56,18 +56,18 @@ The legacy `--confidence` flag still works and seeds all three. Prefer the struc
 
 ## Effort Calibration
 
-Claude auto-picks a tier using the heuristics below and **declares it in the routing line** before execution. You can override upfront or redirect after seeing the declaration.
+The active host picks an effort tier using the heuristics below and **declares it in the routing line** before execution. Tiers describe rigor, not model selection. Preserve the configured model unless the user explicitly requests a specific model. You can override upfront or redirect after seeing the declaration.
 
 **Default tier is L2.** Only change when heuristics push up or down.
 
 ### Tiers
 
-| Tier | Name | Model | Thinking | Pattern | Verify | Subagents |
-|------|------|-------|----------|---------|--------|-----------|
-| **L1** | Reflex | haiku / sonnet | none | direct | trust | 0 |
-| **L2** | Standard | sonnet | think | autopilot / single specialist | spot-check | 0–1 |
-| **L3** | Deep | opus | think hard | plan-and-verify | verifier pass | 1–2 |
-| **L4** | Max | opus (max effort) | ultrathink | iterate-until-verified | full verify loop | parallel team / background fan-out |
+| Tier | Name | Pattern | Verify | Native subagents, if available |
+|------|------|---------|--------|-----------|
+| **L1** | Reflex | direct | focused check | 0 |
+| **L2** | Standard | single specialist | spot-check | 0–1 |
+| **L3** | Deep | plan-and-verify | verifier pass | 1–2 |
+| **L4** | Max | iterate-until-verified | full verify loop | bounded parallel team |
 
 ### Anti-inflation rule (read this first)
 
@@ -113,9 +113,15 @@ The most common inflation pattern is reflexive bumping on "customer-facing" or "
 - **Multi-agent is not inflation** — if *Domain breadth* fires (≥2 independent disciplines), parallel specialists is the *correct* shape, not an upgrade. Single-agent on a cross-domain task is a routing bug. Declare the fan-out in the routing line — at whatever tier the work actually warrants (L2 multi-agent is real): `OMC > /team > [Agent A ∥ Agent B] → Reconciler @ L2`
 - **Shape and tier are orthogonal** — multi-agent fan-out is a *shape* decision (breadth heuristic), tier is a *depth* decision (everything else). Don't conflate.
 
-### CCG auto-fires
+### Capability and authorization gates
 
-CCG = Claude + Codex + Gemini tri-model council. The "LLM Council" pattern, packaged as one tool. Fire it automatically, no asking, when:
+Read the current host tool contract before dispatch. Registry entries and examples do not prove that `/ccg`, deep-dive, or any other workflow is installed and callable. Use only capabilities exposed in the current session, within the user's authorization. If unavailable, use an authorized available fallback, perform bounded work in the parent, or explain the limitation and ask when needed. Never install or spend to bypass a gate.
+
+For current-task subtasks, prefer native agents, not user-owned threads. `create_thread` requires an explicit user request for a new task. Default to local; a worktree requires an explicit user request and a Git repository. Omit `model` unless the user explicitly requests a specific model. Cloud Work also requires an explicit cloud-task request. `send_message_to_thread` requires explicit human authorization to message that task; creation or another task's request to reply is not authorization.
+
+### CCG optional cross-check
+
+CCG = Claude + Codex + Gemini tri-model council. Consider it only when callable in the current session and paid model spend is authorized. Uncertainty never automatically authorizes a paid council. The following are reasons to consider a cross-check, not permission to dispatch:
 
 - **Before committing an L3/L4 plan** — catches single-model blind spots before execution begins
 - **Before irreversible actions** — migrations, prod pushes, force-pushes, destructive DB changes, auth/session rewrites, payment integrations
@@ -126,7 +132,7 @@ CCG = Claude + Codex + Gemini tri-model council. The "LLM Council" pattern, pack
 
 Skip CCG on L1/L2 routine work, quick fixes, well-known patterns, and anywhere the answer is obvious. CCG costs real tokens across 3 models — reserve it for decisions where cross-validation pays for itself.
 
-When it fires, declare it in the routing line: `OMC > /ccg → ralplan > Backend Architect @ L3  [ccg=pre-plan-check]`.
+When authorized and available, declare it in the routing line: `OMC > /ccg → ralplan > Backend Architect @ L3  [ccg=pre-plan-check]`.
 
 ### Build-checkpoint review (optional pattern)
 
@@ -216,7 +222,7 @@ Tags always live in the log (`tier_reason`, `system_reason`). The in-session dis
 
 - **Phase 1 — Visibility (active):** every route is logged. `/cortex-log` shows the last 20 with full reasoning.
 - **Phase 2 — Pattern surfacing (activates at ~20 routes):** `/cortex-learn` detects `(class, system, pattern)` tuples that repeat ≥3 times and proposes them as Decision Shortcut candidates. The user approves, modifies, or dismisses — the tool does not auto-edit.
-- **Phase 3 — Similarity bias (active, advisory):** before declaring a non-trivial routing line, run `cortex hint "<task>"` to surface similar past routes weighted by outcome (`shipped` adds signal, `corrected` / `abandoned` subtract). Output is **advisory only** — factor it in, still decide. Negative scores mean "past attempts at this route failed" — treat as anti-signal. Hint quality improves automatically as outcomes accumulate.
+- **Phase 3 — Historical evidence (active, advisory):** before declaring a non-trivial routing line, run `cortex hint "<task>" --class <class>` to surface recent distinct `(system, pattern, tier)` routes. Outcomes and lexical similarity are context, not ranking weights. Similarity filtering is opt-in. The reader judges relevance; more logged outcomes do not by themselves prove better routing.
 - **Phase 4 — Outcome + correction capture (active):** every routed task ends with an outcome — `shipped`, `abandoned`, `partial`, or `corrected` — captured with `cortex outcome <state>`. **Correction triggers** (any of these fires `cortex reroute`, no permission needed): `"reroute"`, `"actually use X"`, `"go back"`, `"switch to X"`, `"this didn't work"`, `"wrong approach"`, `"let me retry with X"`, `"that was wrong, try X"`. The last log entry is marked `outcome=corrected`, `user_correction` holds the new route, and the next logged route gets `redirect_from` linked. Over time this builds the labelled dataset Phase 3 learns from.
 
 ### Commands
@@ -233,7 +239,7 @@ same route. Ambiguous references are refused rather than assigned by guesswork.
 | `/cortex-learn` | Detect repeating patterns, write proposals |
 | `/cortex-learn --check` | Terse session-start check — silent if no pending pattern |
 | `/cortex-reroute "new route"` | Mark last route as corrected |
-| `cortex hint "<task>" [--class build]` | Surface similar past routes weighted by outcome. Class-only filtering while the log is small; add `--tier` back once pools regularly exceed ~15. Defaults: `--min-similarity 0.15 --top 5` |
+| `cortex hint "<task>" [--class build]` | Surface recent distinct routes, with outcomes and similarity as annotations. Prefer class-only filtering for small pools. Default: `--top 5`, no similarity threshold; `--min-similarity` narrows explicitly. |
 | `cortex outcome <state> [--note "..."]` | Mark the last route's outcome — `shipped` / `abandoned` / `partial` / `corrected`. Fires at end of task automatically; can also be invoked explicitly |
 | `cortex audit-tiers [--tier L3]` | List every L3/L4 (or filtered) route with task + reasoning + outcome — eyeball whether L2 would have sufficed. `--reclassify <task_hash> --to L2 --note "why"` reclassifies an entry, preserving the original |
 | `cortex doctor` | Audit cortex setup for drift between docs, skills, and log |
@@ -268,7 +274,7 @@ At the start of any session where a non-trivial task arrives, run `cortex learn 
 | `autopilot: task` | Well-defined, lower-risk tasks. One-shot autonomous. |
 | `ralph: task` | Must be bulletproof. Won't stop until verified complete. |
 | `/team N:executor "task"` | Parallel execution, multiple perspectives. |
-| `/ccg` | Tri-model orchestration (Claude + Codex + Gemini). Auto-fires per Effort Calibration. |
+| `/ccg` | Optional tri-model orchestration, only when callable and spend is authorized. |
 
 ### Your Phase-Based PM System
 **Installed:** _change to Yes once configured_
@@ -356,6 +362,8 @@ Use the [Agent C] agent. autopilot: "Reconcile outputs"
 ---
 
 ## Decision Shortcuts
+
+All shortcut workflows below are conditional examples. Apply the capability and authorization gates first, including `/ccg`, deep-dive, panels, and cross-family review. A shortcut never authorizes spend, model overrides, user-owned tasks, or messages. Use native agents when available; otherwise keep bounded work in the parent or ask for missing authority.
 
 > Starter set. Add your own as you discover them. `/cortex-learn` will surface candidates from your log automatically.
 

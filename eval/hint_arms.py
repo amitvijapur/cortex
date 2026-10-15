@@ -29,7 +29,7 @@ Read-only. Run: python3 eval/hint_arms.py
 import json
 import math
 import os
-from collections import Counter, defaultdict
+from collections import defaultdict
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
@@ -66,7 +66,7 @@ def route_of(e):
 # ---------------------------------------------------------------------------
 
 def arm_jaccard(q, pool, floor=0.15):
-    """Shipped behaviour: class filter, Jaccard over task text, hard similarity gate."""
+    """Historical behaviour: class filter, Jaccard task text, hard similarity gate."""
     pool = [e for e in pool if e.get("class") == q.get("class")]
     qt = tokens(q.get("task", ""))
     scored = [(jaccard(qt, tokens(e.get("task", ""))), e) for e in pool]
@@ -81,8 +81,14 @@ def arm_jaccard_open(q, pool):
 
 
 def arm_recency(q, pool):
-    """No scoring at all: same class, most recent N. The baseline that should go first."""
+    """Historical non-distinct baseline: same class, most recent N entries."""
     return [e for e in pool if e.get("class") == q.get("class")][-TOP_N:][::-1]
+
+
+def arm_production(q, pool):
+    """Current CLI with --class, default top/gate, and no hindsight tier filter."""
+    return _cli.select_hint(pool, q.get("task"), classification=q.get("class"),
+                            top=TOP_N)[1]
 
 
 def arm_recency_project(q, pool):
@@ -159,7 +165,8 @@ def arm_graph_2hop(q, pool):
 
 
 ARMS = {
-    "jaccard >=0.15 (shipped)": arm_jaccard,
+    "production, distinct class": arm_production,
+    "jaccard >=0.15 (historical)": arm_jaccard,
     "jaccard >=0.05": arm_jaccard_open,
     "recency, class": arm_recency,
     "recency, class+project": arm_recency_project,
@@ -167,6 +174,23 @@ ARMS = {
     "shape oracle (cheats)": arm_shape_oracle,
     "graph 2-hop (query-legal)": arm_graph_2hop,
 }
+
+
+def replay_cases(rows):
+    """Yield (original query, query-time pool) from raw append-only prefixes.
+
+    File order is availability order, as in the CLI. Sorting by timestamps or
+    collapsing the complete log first can leak later, even backdated, corrections.
+    Corrections are never queries, even if they carry task text. Query labels stay
+    as originally logged; only corrections already in the prefix affect priors.
+    Legacy in-place edits cannot be undone without an earlier log snapshot.
+    """
+    for i, row in enumerate(rows):
+        if row.get("event") in _cli.CORRECTION_KINDS or not row.get("task"):
+            continue
+        pool = _cli.collapse(rows[:i])
+        if len(pool) >= MIN_POOL:
+            yield row, pool
 
 
 def mcnemar_exact(b, c):
@@ -180,22 +204,26 @@ def mcnemar_exact(b, c):
 
 
 def main():
-    rows = [json.loads(line) for line in open(LOG_PATH) if line.strip()]
-    entries = [r for r in rows if r.get("task")]
-    entries.sort(key=lambda r: r.get("ts", ""))
-
-    queries = [i for i in range(len(entries)) if i >= MIN_POOL]
+    with open(LOG_PATH) as stream:
+        rows = [json.loads(line) for line in stream if line.strip()]
+    cases = list(replay_cases(rows))
+    queries = range(len(cases))
     # 'findable' = at least one chronologically prior entry carries the same route. Where
     # none does, no retriever can succeed, so scoring over all queries dilutes every arm
     # by the same constant and hides which one is actually recovering the reachable cases.
     findable = set()
     for i in queries:
-        if any(route_of(p) == route_of(entries[i]) for p in entries[:i]):
+        q, pool = cases[i]
+        if any(route_of(p) == route_of(q) for p in pool):
             findable.add(i)
 
     print(f"log: {LOG_PATH}")
-    print(f"entries: {len(entries)}   queries (pool >= {MIN_POOL}): {len(queries)}   "
-          f"findable: {len(findable)} ({100 * len(findable) / len(queries):.1f}%)")
+    print(f"entries: {len(_cli.collapse(rows))}   queries (pool >= {MIN_POOL}): {len(queries)}   "
+          f"findable: {len(findable)} ({100 * len(findable) / max(1, len(queries)):.1f}%)")
+    print("Replay: raw append order; corrections applied only within each query's prefix.")
+    if not cases:
+        print("No eligible queries; no benchmark scores available.")
+        return
     print()
     print("'findable' = a prior entry with the same route exists. The oracle ceiling.")
     print("Correct = the route this entry actually got. Agreement with history, not quality.")
@@ -209,7 +237,7 @@ def main():
         fired = t1 = t5 = t5f = 0
         per_query = {}
         for i in queries:
-            q, pool = entries[i], entries[:i]
+            q, pool = cases[i]
             got = fn(q, pool)
             if got:
                 fired += 1
@@ -226,7 +254,8 @@ def main():
         hits[name] = per_query
         nf = len(findable)
         print(f"  {name:<28} {100 * fired / len(queries):6.1f}% {100 * t1 / len(queries):6.1f}%"
-              f" {100 * t5 / len(queries):6.1f}% {t5f:8d}/{nf:<3d} = {100 * t5f / nf:5.1f}%")
+              f" {100 * t5 / len(queries):6.1f}% {t5f:8d}/{nf:<3d} = "
+              f"{100 * t5f / nf if nf else 0.0:5.1f}%")
 
     print()
     print("=" * 78)
@@ -246,18 +275,19 @@ def main():
     print(f"  discordant pairs:  no-graph only {b}, graph only {c}")
     print(f"  McNemar exact two-sided p = {p:.4f}")
     print()
-    print("  Pre-registered bar, fixed before the graph arm was written and carried over")
-    print("  from the MLX decision at the same sample size: the graph must recover at")
-    print("  least 5 cases the best no-graph arm misses, net. Anything smaller is not")
-    print(f"  distinguishable from noise here. Net recovery: {c - b:+d}.")
+    print("  Carried-forward exploratory heuristic from the historical MLX decision:")
+    print("  at least 5 net cases recovered over the best no-graph arm, with p < 0.05.")
+    print("  This is not a preregistered test for the current growing log or a guarantee")
+    print("  of statistical separation from noise. The comparator is selected on this log.")
+    print(f"  Net recovery: {c - b:+d}.")
     print()
     verdict = "CLEARS" if (c - b) >= 5 and p < 0.05 else "DOES NOT CLEAR"
-    print(f"  Verdict: the graph arm {verdict} the bar.")
+    print(f"  Exploratory verdict: the graph arm {verdict} the carried-forward heuristic.")
 
-    label_sensitivity(entries, queries)
+    label_sensitivity(cases)
 
 
-def label_sensitivity(entries, queries):
+def label_sensitivity(cases):
     """Why the recency baseline is quoted at several different numbers.
 
     The MLX decision recorded 23.8% for 'recency, same class, no scoring' at n=130 and
@@ -281,8 +311,8 @@ def label_sensitivity(entries, queries):
 
     def variant(key, dedup):
         hit = 0
-        for i in queries:
-            pool = [e for e in entries[:i] if e.get("class") == entries[i].get("class")]
+        for query, prior in cases:
+            pool = [e for e in prior if e.get("class") == query.get("class")]
             seen = []
             for e in reversed(pool):
                 r = key(e)
@@ -291,19 +321,19 @@ def label_sensitivity(entries, queries):
                 seen.append(r)
                 if len(seen) >= TOP_N:
                     break
-            if key(entries[i]) in seen:
+            if key(query) in seen:
                 hit += 1
-        return 100 * hit / len(queries)
+        return 100 * hit / len(cases) if cases else 0.0
 
     print(f"  {'label':<18} {'top-5, recent entries':>23} {'top-5, distinct routes':>24}")
     print(f"  {'-' * 18} {'-' * 23} {'-' * 24}")
     for name, key in (("full route", full), ("system+pattern", syspat)):
         print(f"  {name:<18} {variant(key, False):22.1f}% {variant(key, True):23.1f}%")
     print()
-    print("  Deduplicating by route is the variant shipped: it scores marginally better and")
-    print("  produces five distinct suggestions rather than five rows that may collapse to")
-    print("  two. The margin is under the 5-case bar, so that is a design preference with a")
-    print("  measurement attached, not a claimed improvement.")
+    print("  Deduplicating by route is the shipped design preference. It surfaces up to")
+    print("  five distinct suggestions rather than repeated entries for the same route.")
+    print("  The scores above describe this replay; their direction and margin can change")
+    print("  as the log grows. Historical agreement does not establish routing quality.")
 
 
 if __name__ == "__main__":

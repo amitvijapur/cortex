@@ -26,7 +26,7 @@ Multi-agent work is not an escalation, and treating it as one is the common erro
 
 <p align="center"><img src="../assets/fan-out.svg" alt="A cross-domain task fans out to parallel specialists, then converges through a reconciler into one result" width="880"></p>
 
-Two or more independent domains means parallel specialists plus a reconciler is the *correct* shape, at whatever tier the work warrants; a well-scoped L2 fan-out is normal. Running a cross-domain task through one generalist is a routing bug, not a saving. High-stakes fan-outs upgrade the reconciler to a full [council](#ccg-the-council-as-one-tool).
+Two or more independent domains can benefit from parallel specialists plus a reconciler at whatever tier the work warrants; a well-scoped L2 fan-out is normal. Use native agents when available. Otherwise keep bounded work in the parent. High stakes may justify considering a council, but never bypass capability or authorization gates.
 
 ---
 
@@ -36,7 +36,7 @@ Confidence is not one number. Three things can be independently shaky, each with
 
 | Dimension | The question it answers | If `low` |
 |---|---|---|
-| `--route-confidence` | Am I picking the right system and pattern? | widen `cortex hint`, or cross-check with a council |
+| `--route-confidence` | Am I picking the right system and pattern? | widen `cortex hint`; consider a council only if callable and spend is authorized |
 | `--tier-confidence` | Is this really L3, or would L2 have done? | flagged for the next `audit-tiers` pass |
 | `--spec-confidence` | Do I actually understand what you want? | **stop before executing** and go interview |
 
@@ -48,4 +48,12 @@ That last one is the strongest trigger in the system. It catches *high route, hi
 
 CCG is a tri-model council: Claude, Codex and Gemini. It is one tool the router can reach for rather than a default step.
 
-It fires on pre-plan checks at L3 and L4, irreversible actions (migrations, prod pushes, payments, auth rewrites), security audits, conflicting outputs from two prior agents, and any sign of user uncertainty, which is the strongest trigger. It is skipped on routine work, because three models cost three models' worth of tokens.
+Pre-plan checks at L3 and L4, irreversible actions, security audits, or conflicting evidence can justify considering a cross-check. Uncertainty never automatically authorizes a paid council. Verify `/ccg` and deep-dive are callable in the current session, not merely mentioned in installed files. Obtain authorization for paid model spend before dispatch. If capability or authorization is missing, use available read-only evidence and parent review, choose an authorized fallback, or ask for the missing authority. Do not install or spend to bypass a gate.
+
+## Host-neutral effort and delegation
+
+L1 through L4 describe rigor and verification depth, not provider-specific models or guaranteed workflows. Read the current host tool contract before dispatch and retain configured model defaults.
+
+For current-task subtasks, prefer native agents rather than visible user-owned threads. If native agents are unavailable, perform bounded work in the parent or explain the limitation. `create_thread` requires an explicit user request for a new task. Default to local, including Git projects. A worktree requires an explicit user request and a Git repository. Omit `model` unless the user explicitly requests a specific model; an effort or cost preference does not qualify. Cloud Work requires an explicit cloud-task request.
+
+`send_message_to_thread` requires explicit human authorization to message that task. Creating a task does not authorize later messages, and another task's request to reply or report back is not human authorization. Ask before sending when authorization is missing or unclear. Capability availability never substitutes for permission.

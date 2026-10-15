@@ -26,6 +26,9 @@ Per file, against base / local / upstream:
     CONFLICT   both sides edited the same region       -> report, change nothing
 
 Dry run by default. Nothing is written without --apply.
+Upstream files come from one pinned HEAD commit, never from the working tree.
+Destination symlinks (including ancestor directories and stamps) are rejected
+before any changes are applied.
 
     python3 bin/sync-agents --base 6f8d5e5     # first run, no stamp yet
     python3 bin/sync-agents                    # later runs, stamp supplies the base
@@ -34,9 +37,10 @@ Dry run by default. Nothing is written without --apply.
 import argparse
 import json
 import re
-import shutil
+import stat
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 SRC = Path.home() / "Desktop" / "tools" / "agency-agents-src"
@@ -77,6 +81,46 @@ def agent_files(root):
     return out
 
 
+def preflight(path, directory=False):
+    """Reject links and wrong types without resolving away unsafe ancestors."""
+    for parent in reversed(path.parents):
+        preflight_entry(parent, directory=True)
+    preflight_entry(path, directory=directory)
+
+
+def preflight_entry(path, directory):
+    try:
+        mode = path.lstat().st_mode
+    except FileNotFoundError:
+        return
+    expected = stat.S_ISDIR if directory else stat.S_ISREG
+    if not expected(mode):
+        raise ValueError(f"unsafe destination {path}: expected a real "
+                         f"{'directory' if directory else 'regular file'}")
+
+
+def committed_agents(src, commit):
+    """Read exact committed bytes, ignoring staged, unstaged and untracked edits."""
+    tree = subprocess.run(["git", "-C", str(src), "ls-tree", "-rz", commit],
+                          capture_output=True, check=True).stdout
+    files = {}
+    for entry in tree.split(b"\0"):
+        if not entry:
+            continue
+        metadata, name = entry.split(b"\t", 1)
+        rel = Path(name.decode("utf-8"))
+        if (rel.suffix != ".md" or rel.parts[0] in SKIP_DIRS
+                or rel.name in DOC_NAMES):
+            continue
+        mode, kind, oid = metadata.split()
+        if kind != b"blob" or mode not in (b"100644", b"100755"):
+            raise ValueError(f"not a regular committed agent: {rel}")
+        files[rel] = subprocess.run(
+            ["git", "-C", str(src), "cat-file", "blob", oid.decode("ascii")],
+            capture_output=True, check=True).stdout
+    return files
+
+
 def description_of(text):
     m = DESC_RE.search(text)
     return m.group(0) if m else None
@@ -105,7 +149,14 @@ def main():
     ap.add_argument("--dst", default=str(DST))
     args = ap.parse_args()
 
-    src, dst = Path(args.src).expanduser(), Path(args.dst).expanduser()
+    src = Path(args.src).expanduser()
+    dst = Path(args.dst).expanduser().absolute()
+    try:
+        preflight(dst, directory=True)
+        preflight(dst / STAMP)
+        preflight(dst / BASES)
+    except (ValueError, OSError) as exc:
+        sys.exit(str(exc))
     for p in (src, dst):
         if not p.is_dir():
             sys.exit(f"missing: {p}")
@@ -121,6 +172,29 @@ def main():
     if git(src, "cat-file", "-e", f"{base}^{{commit}}") is None:
         sys.exit(f"base commit {base} is not in {src}")
 
+    full = (git(src, "rev-parse", "--verify", "HEAD^{commit}") or "").strip()
+    if not full:
+        sys.exit(f"no HEAD commit in {src}")
+    try:
+        upstream = committed_agents(src, full)
+        targets = {dst / rel for rel in upstream} | {stamp_path, dst / BASES}
+        # Refuse aliases conservatively even on case-sensitive hosts so a plan
+        # remains safe on macOS case/normalisation-insensitive filesystems.
+        def path_key(path):
+            return tuple(unicodedata.normalize("NFD", part).casefold()
+                         for part in path.parts)
+        target_keys = {path_key(target) for target in targets}
+        if len(target_keys) != len(targets):
+            raise ValueError("unsafe destination: case/normalisation target collision")
+        for target in sorted(targets):
+            if any(path_key(parent) in target_keys for parent in target.parents):
+                raise ValueError(f"unsafe destination {target}: file/directory target collision")
+            preflight(target)
+        upstream_text = {rel: data.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+                         for rel, data in upstream.items()}
+    except (ValueError, OSError, subprocess.CalledProcessError) as exc:
+        sys.exit(str(exc))
+
     # The global stamp describes successful files. Conflicts retain their own
     # original ancestor until resolved, even across additional upstream commits.
     bases_path = dst / BASES
@@ -135,17 +209,18 @@ def main():
     except (ValueError, OSError) as exc:
         sys.exit(f"invalid {bases_path}: {exc}")
 
-    head = (git(src, "log", "-1", "--format=%h %cs") or "?").strip()
+    head = (git(src, "log", "-1", "--format=%h %cs", full) or "?").strip()
     print(f"source : {src}  @ {head}")
     print(f"base   : {base}  (what the install was copied from)")
     print(f"install: {dst}")
     print(f"mode   : {'APPLY' if args.apply else 'dry run'}\n")
 
     new, update, merge, conflict, current = [], [], [], [], []
-    s_files = agent_files(src)
+    s_files = set(upstream)
+    merged = {}
 
     for rel in sorted(s_files):
-        up = (src / rel).read_text()
+        up = upstream_text[rel]
         dp = dst / rel
         if not dp.exists():
             new.append(rel)
@@ -172,6 +247,7 @@ def main():
         upstream_kept_desc = description_of(up) == description_of(b)
         if local_desc_only and upstream_kept_desc:
             merge.append(rel)
+            merged[rel] = splice(up, loc)
         elif local_desc_only and not upstream_kept_desc:
             conflict.append((rel, "both sides rewrote the description"))
         else:
@@ -201,11 +277,10 @@ def main():
 
     for rel in new + update:
         (dst / rel).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src / rel, dst / rel)
+        (dst / rel).write_bytes(upstream[rel])
     for rel in merge:
-        (dst / rel).write_text(splice((src / rel).read_text(), (dst / rel).read_text()))
+        (dst / rel).write_text(merged[rel])
 
-    full = (git(src, "rev-parse", "HEAD") or "").strip()
     unresolved = {rel.as_posix() for rel, _ in conflict}
     # Retain absent upstream conflicts too, in case the file is reintroduced.
     next_bases = {key: value for key, value in bases.items()
