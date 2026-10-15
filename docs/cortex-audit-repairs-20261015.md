@@ -75,4 +75,3 @@ Doctor with the corrected root reports 27 pass, eight warnings and zero failures
 Five warnings describe preserved personal learning/reroute wording variants;
 three describe missing exact system labels, explicitly unknown usage rather than
 non-use. Do not delete variants or invent usage to obtain a green summary.
-
