@@ -1,3 +1,9 @@
+# Maintainer work log
+
+Running plans, progress and session reviews for Cortex maintainers. Dated entries
+preserve the decisions and checklist states recorded at the time; older entries
+may describe earlier implementations. See the [maintainer index](README.md).
+
 # Astra and ChatGPT Work delegation
 
 ## Optional Jev routing adviser, 20 September 2026
@@ -70,7 +76,7 @@ the pre-existing untracked AGENTS.md and original intake test fixture.
   left running, confirmed by Amit on 14 September. Seven queued intake items are preserved.
 - No push or merge. Original untracked AGENTS.md and intake test fixture preserved.
 
-Operational details: [intake maintenance](../docs/intake-operations.md). Private
+Operational details: [intake maintenance](../intake-operations.md). Private
 security evidence and tests remain in `.omc/intake-repair/REPORT.md` and its bundle.
 
 ## Frontend design library, approved 13 September 2026
