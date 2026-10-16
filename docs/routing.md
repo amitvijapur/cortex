@@ -1,12 +1,46 @@
 # Routing in depth
 
-The reasoning behind the calibration rules. The [README](../README.md#how-it-works) covers the protocol and the tier table; this is why the tiers behave the way they do.
+The [README](../README.md#how-it-works) introduces the routing layer. This guide describes the protocol, effort tiers and calibration rules. Cortex supplies instructions and records decisions; the active agent interprets the task and executes the selected workflow.
+
+## The routing protocol
+
+For a non-trivial task, the agent follows this sequence:
+
+1. **Classify** the work, such as build, review, plan, research, debug or design.
+2. **Calibrate** the effort required, starting at L2 and naming the reason for escalation.
+3. **Retrieve history** with `cortex hint "<task>" --class <class>`.
+4. **Choose a workflow** from the registry and confirm it is callable in the current session.
+5. **Select specialists** when available, using bounded parallel work for independent disciplines.
+6. **Declare and log** a routing line before executing the work.
+7. **Execute and verify** at the chosen rigor level.
+8. **Record the outcome**, or a correction when the route changes.
+
+<p align="center"><img src="../assets/routing-protocol.svg" alt="Classify, calibrate, retrieve history, choose a route and specialists, log, execute and record the outcome" width="880"></p>
+
+A line such as `Direct > plan-and-verify @ L3` declares the agent's intended approach. With an installed orchestration system, it might instead be `OMC > ralplan > Backend Architect @ L3`. These are illustrative declarations, not commands that the CLI dispatches. Use only systems and specialists exposed by the active host.
+
+The declaration gives the user an opportunity to correct the approach. `cortex reroute` appends that correction to the record. Genuine L1 trivia, plain file reads and casual questions can skip the full protocol.
+
+## Effort tiers
+
+Tiers describe rigor and verification depth. They do not automatically select a model, alter provider settings or guarantee that subagents are available. Preserve configured model defaults unless the user explicitly requests a specific model.
+
+| Tier | Name | Approach | Verification | Native subagents, if available |
+|---|---|---|---|---|
+| L1 | Reflex | Direct execution | Focused check | 0 |
+| L2 | Standard | Bounded work or a single specialist | Spot-check | 0 or 1 |
+| L3 | Deep | Plan and verify | Independent verifier pass where available | 1 or 2 |
+| L4 | Max | Iterate until verified | Full verification loop | Bounded parallel team |
+
+**L2 is the default.** Blast radius, ambiguity, stakes, novelty and reversibility can justify changing it. A multi-domain task changes the work's shape; it does not by itself require a higher tier.
+
+The framework recognizes plain-language preferences such as “go light” for L1, “standard” for L2, “be thorough” for L3 and “ultrathink” for L4. “Bump it” or “drop it” changes one tier. These preferences guide the agent's rigor; they do not authorize paid calls or a different model.
 
 ---
 
 ## The anti-inflation rule
 
-**L3 must justify itself against L2, not the other way around.** Picking L3 because the work feels important or is customer-facing is inflation. The route has to name a concrete failure mode L2 would produce, such as *"L2 would skip the verifier pass and this touches auth"*.
+**L3 must justify itself against L2, not the other way around.** Picking L3 because the work feels important or is customer-facing is inflation. The route has to name a concrete failure mode L2 would produce, such as *"the session compatibility change needs an independent verification pass"*.
 
 Three tests. All "no" means **L2**:
 
