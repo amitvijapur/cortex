@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="340" viewBox="0 0 820 340" role="img" aria-labelledby="cortex-hero-title cortex-hero-desc">
+  <title id="cortex-hero-title">One task, a chosen route</title>
+  <desc id="cortex-hero-desc">One task passes through Cortex to a chosen route with a workflow, specialist, and effort level. Cortex selects from the capabilities available for that task.</desc>
+  <defs>
+    <!-- Same canonical geometry as cortex-mark.svg. The r=45 bases overlap the ring;
+         all outer joins meet tangentially at r=56. Local references keep this SVG standalone. -->
+    <path id="cortex-arm" d="M -17.304952 -53.259165 C 11.987589 -62.776888 29 -67 30 -93 C 33 -122 17 -150 -11 -165 C -27 -173 -36 -182 -36 -198 C -36 -219 -20 -236 0 -236 C 25 -236 43 -213 49 -183 C 57 -146 50 -108 52 -76 C 53 -58 27.201166 -57.833698 45.304952 -32.915974 L 36.405765 -26.450336 A 45 45 0 0 0 -13.905765 -42.797543 Z"/>
+    <g id="cortex-mark" fill="#8B5CF6">
+      <path fill-rule="evenodd" d="M 56 0 A 56 56 0 1 1 -56 0 A 56 56 0 1 1 56 0 Z M 44 0 A 44 44 0 1 0 -44 0 A 44 44 0 1 0 44 0 Z"/>
+      <use href="#cortex-arm" transform="rotate(0)"/>
+      <use href="#cortex-arm" transform="rotate(72)"/>
+      <use href="#cortex-arm" transform="rotate(144)"/>
+      <use href="#cortex-arm" transform="rotate(216)"/>
+      <use href="#cortex-arm" transform="rotate(288)"/>
+    </g>
+  </defs>
+  <rect width="820" height="340" rx="20" fill="#121018"/>
+  <g font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <text x="44" y="61" fill="#EDE9FE" font-size="26" font-weight="600">One task. A chosen route.</text>
+    <g fill="none" stroke="#8B5CF6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M 176 177 H 244 M 238 171 L 244 177 L 238 183"/>
+      <path d="M 446 177 H 520 M 514 171 L 520 177 L 514 183"/>
+    </g>
+    <g aria-hidden="true" fill="none" stroke="#C4B5FD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 78 137 H 119 L 132 150 V 204 H 78 Z M 119 137 V 150 H 132"/>
+      <path d="M 91 165 H 118 M 91 178 H 118 M 91 191 H 109"/>
+    </g>
+    <text x="105" y="244" text-anchor="middle" fill="#EDE9FE" font-size="21" font-weight="500">Task</text>
+    <use href="#cortex-mark" transform="translate(345 177) scale(.36)" aria-hidden="true"/>
+    <text x="345" y="294" text-anchor="middle" fill="#C4B5FD" font-size="20" font-weight="500">Choose</text>
+    <g transform="translate(550 112)">
+      <text x="0" y="0" fill="#EDE9FE" font-size="23" font-weight="600">Chosen route</text>
+      <path d="M 0 20 H 222" fill="none" stroke="#3B304F"/>
+      <g fill="#C4B5FD" font-size="21" font-weight="400">
+        <text x="0" y="57">Workflow</text>
+        <text x="0" y="97">Specialist</text>
+        <text x="0" y="137">Effort</text>
+      </g>
+      <g fill="#8B5CF6" aria-hidden="true">
+        <circle cx="211" cy="50" r="4"/>
+        <circle cx="211" cy="90" r="4"/>
+        <circle cx="211" cy="130" r="4"/>
+      </g>
+    </g>
+  </g>
+</svg>

@@ -1,15 +1,48 @@
 # Cortex logo direction
 
-The synchronous mark evolves the original five-node blue hub. Five curved paths
-move around a shared central opening, expressing coordination while retaining
-the original identity. Cortex remains the name. Synchrony is a visual direction,
-not a claim of automatic shared memory or universal agent orchestration.
+The current identity is a flat violet mark, with five equal curved arms around
+a shared circular opening. `assets/cortex-mark.svg` defines one canonical arm
+and repeats it at 72-degree intervals, keeping every arm identical. Cortex remains
+the name; synchrony informs the coordinated movement in the mark.
 
-The README uses `assets/cortex-logo-synchronous.png`. The original
-`assets/cortex-logo.png` remains unchanged for comparison and rollback.
-The new asset is a generated transparent PNG, not a vector master. It was made
-with the built-in image-generation tool and visually inspected after a finishing
-pass reduced the bright cyan treatment. No trademark clearance is implied.
+The README uses `assets/cortex-logo.svg` on light backgrounds and
+`assets/cortex-logo-light.svg` on dark backgrounds. Both place the supplied Cortex
+lettering below the mark. The wordmark source is a transparent PNG reproduced
+from the user's reference using the built-in image-generation tool, rather than
+an identified or bundled font. The SVG mark is vector geometry; the wordmark is
+an embedded raster, so these lockups are mixed-format SVGs. Both modes use the same
+lettering source with a flat colour filter, keeping their spacing identical.
+
+`assets/cortex-hero.svg` replaces the raster hero in the README. The documentation
+diagrams use the same violet/lavender palette, retaining their explanations and
+semantic status colours. The previous blue PNGs remain historical assets.
+
+## Palette and maintenance
+
+| Role | Colour |
+| --- | --- |
+| Mark and primary accent | `#8B5CF6` |
+| Secondary accent | `#C4B5FD` |
+| Dark surface | `#121018` |
+| Raised dark surface | `#1A1526` |
+| Light text | `#F1EDF8` |
+| Secondary text | `#B7ACC9` |
+| Dark lettering | `#17121F` |
+
+After editing the mark or lettering source, run `node scripts/build_brand_assets.mjs`
+to regenerate the two self-contained lockups. `--check` detects stale lockups.
+The hero carries the same arm geometry; keep it in sync when changing the mark.
+Preview all assets together in `assets/brand-preview.html` at wide and narrow sizes.
+
+The wordmark extraction prompt asked the image tool to preserve the supplied
+letter silhouettes, weight, kerning and capitalisation, remove the pale background,
+and produce flat dark lettering with transparency. A native SVG filter derives
+the light variant from that same source, avoiding separate generated letterforms.
+
+## Previous blue exploration
+
+The prompts below record the earlier dimensional blue concept. They do not define
+the current minimal violet identity.
 
 ## Initial edit prompt
 

@@ -11,8 +11,8 @@
 
   body {
     font-family: 'Inter', -apple-system, sans-serif;
-    background: #0b1220;
-    color: #e4e4e7;
+    background: #121018;
+    color: #F1EDF8;
     min-height: 100vh;
     padding: 60px 40px;
     overflow-x: hidden;
@@ -23,8 +23,8 @@
     position: fixed;
     inset: 0;
     background-image:
-      linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
+      linear-gradient(rgba(196,181,253,0.012) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(196,181,253,0.012) 1px, transparent 1px);
     background-size: 40px 40px;
     pointer-events: none;
     z-index: 0;
@@ -47,7 +47,7 @@
     font-size: 52px;
     font-weight: 800;
     letter-spacing: -2px;
-    background: linear-gradient(135deg, #eaf2fb, #63b3ed 55%, #4a9eff);
+    background: #C4B5FD;
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -56,7 +56,7 @@
 
   .header p {
     font-size: 15px;
-    color: #52525b;
+    color: #9485AA;
     font-weight: 400;
     letter-spacing: 3px;
     text-transform: uppercase;
@@ -74,7 +74,7 @@
     content: '';
     width: 2px;
     height: 100%;
-    background: linear-gradient(to bottom, rgba(255,255,255,0.25), rgba(255,255,255,0.08));
+    background: linear-gradient(to bottom, rgba(196,181,253,0.25), rgba(196,181,253,0.08));
   }
 
   .flow-connector .arrow {
@@ -85,7 +85,7 @@
     width: 0; height: 0;
     border-left: 6px solid transparent;
     border-right: 6px solid transparent;
-    border-top: 8px solid rgba(255,255,255,0.25);
+    border-top: 8px solid rgba(196,181,253,0.25);
   }
 
   /* Entry point */
@@ -95,14 +95,14 @@
   }
 
   .entry-box {
-    background: linear-gradient(135deg, #27272a, #3f3f46);
+    background: #1A1526;
     padding: 16px 48px;
     border-radius: 50px;
     font-size: 17px;
     font-weight: 600;
-    color: #fafafa;
-    border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 0 40px rgba(255, 255, 255, 0.04);
+    color: #F1EDF8;
+    border: 1px solid rgba(196,181,253,0.08);
+    box-shadow: none;
   }
 
   /* Router */
@@ -111,8 +111,8 @@
   }
 
   .router-box {
-    background: rgba(255,255,255,0.025);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(196,181,253,0.025);
+    border: 1px solid rgba(196,181,253,0.08);
     border-radius: 16px;
     padding: 28px 32px;
     max-width: 560px;
@@ -123,7 +123,7 @@
     font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 2px;
-    color: #a1a1aa;
+    color: #B7ACC9;
     margin-bottom: 18px;
     text-align: center;
   }
@@ -144,24 +144,24 @@
     width: 26px;
     height: 26px;
     border-radius: 50%;
-    background: radial-gradient(circle at 50% 38%, #7cbaff, #2b6fd6);
-    border: 1px solid rgba(140,190,255,0.7);
+    background: #C4B5FD;
+    border: 1px solid rgba(196,181,253,0.7);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 11px;
     font-weight: 600;
-    color: #eef6ff;
+    color: #121018;
     flex-shrink: 0;
-    box-shadow: 0 0 14px rgba(74,158,255,0.5), 0 0 4px rgba(74,158,255,0.85);
+    box-shadow: none;
   }
 
   .step-text {
     font-size: 13px;
-    color: #a1a1aa;
+    color: #B7ACC9;
   }
 
-  .step-text strong { color: #f4f4f5; }
+  .step-text strong { color: #F1EDF8; }
 
   .step-tags {
     display: inline-flex;
@@ -175,12 +175,12 @@
     font-size: 10px;
     padding: 2px 7px;
     border-radius: 4px;
-    background: rgba(255,255,255,0.05);
-    color: #d4d4d8;
+    background: rgba(196,181,253,0.05);
+    color: #B7ACC9;
   }
 
   .route-code {
-    color: #e4e4e7;
+    color: #F1EDF8;
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
   }
@@ -199,16 +199,16 @@
   .skip-line {
     width: 50px;
     height: 2px;
-    background: linear-gradient(to right, rgba(255,255,255,0.2), rgba(255,255,255,0.4));
+    background: linear-gradient(to right, rgba(196,181,253,0.2), rgba(196,181,253,0.4));
   }
 
   .skip-box {
     padding: 8px 16px;
     border-radius: 8px;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(196,181,253,0.04);
+    border: 1px solid rgba(196,181,253,0.1);
     font-size: 12px;
-    color: #a1a1aa;
+    color: #B7ACC9;
     white-space: nowrap;
   }
 
@@ -233,20 +233,20 @@
     text-transform: uppercase;
     letter-spacing: 1.5px;
     flex-shrink: 0;
-    background: rgba(255,255,255,0.06);
-    color: #e4e4e7;
-    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(196,181,253,0.06);
+    color: #F1EDF8;
+    border: 1px solid rgba(196,181,253,0.12);
   }
 
   .tier-line {
     flex: 1;
     height: 1px;
-    background: linear-gradient(to right, rgba(255,255,255,0.18), transparent);
+    background: linear-gradient(to right, rgba(196,181,253,0.18), transparent);
   }
 
   .tier-hint {
     font-size: 12px;
-    color: #52525b;
+    color: #9485AA;
     flex-shrink: 0;
     font-style: italic;
   }
@@ -266,8 +266,8 @@
     padding: 22px;
     position: relative;
     overflow: hidden;
-    background: rgba(255,255,255,0.025);
-    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(196,181,253,0.025);
+    border: 1px solid rgba(196,181,253,0.06);
     transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
   }
 
@@ -278,7 +278,7 @@
     inset: 0;
     border-radius: 12px;
     padding: 1px;
-    background: linear-gradient(135deg, var(--card-color, rgba(255,255,255,0.3)), transparent 50%);
+    background: linear-gradient(135deg, var(--card-color, rgba(196,181,253,0.3)), transparent 50%);
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
@@ -289,7 +289,7 @@
   .system-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    border-color: rgba(255,255,255,0.12);
+    border-color: rgba(196,181,253,0.12);
   }
 
   /* Card identity — only --card-color survives. Backgrounds are unified mono. */
@@ -347,19 +347,19 @@
   .system-name {
     font-size: 15px;
     font-weight: 700;
-    color: #f4f4f5;
+    color: #F1EDF8;
     line-height: 1.2;
   }
 
   .system-subtitle {
     font-size: 10px;
-    color: #52525b;
+    color: #9485AA;
     font-family: 'JetBrains Mono', monospace;
   }
 
   .system-desc {
     font-size: 12px;
-    color: #a1a1aa;
+    color: #B7ACC9;
     line-height: 1.5;
     margin-bottom: 14px;
   }
@@ -375,9 +375,9 @@
     font-size: 10px;
     padding: 3px 7px;
     border-radius: 4px;
-    background: rgba(255,255,255,0.04);
-    color: #a1a1aa;
-    border: 1px solid rgba(255,255,255,0.05);
+    background: rgba(196,181,253,0.04);
+    color: #B7ACC9;
+    border: 1px solid rgba(196,181,253,0.05);
   }
 
   /* Connector between tiers */
@@ -392,7 +392,7 @@
     content: '';
     width: 2px;
     height: 100%;
-    background: rgba(255,255,255,0.06);
+    background: rgba(196,181,253,0.06);
   }
 
   .tier-connector-label {
@@ -400,12 +400,12 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: #0b1220;
+    background: #121018;
     padding: 2px 12px;
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 2px;
-    color: #3f3f46;
+    color: #9485AA;
   }
 
   /* Multi-connect lines */
@@ -422,7 +422,7 @@
     position: absolute;
     top: 50%;
     height: 1px;
-    background: rgba(255,255,255,0.06);
+    background: rgba(196,181,253,0.06);
   }
 
   .connect-visual .v-lines {
@@ -435,7 +435,7 @@
   .connect-visual .v-line {
     width: 1px;
     height: 100%;
-    background: rgba(255,255,255,0.06);
+    background: rgba(196,181,253,0.06);
   }
 
   /* Design Pipeline */
@@ -451,11 +451,11 @@
     letter-spacing: 3px;
     margin-bottom: 22px;
     font-weight: 600;
-    color: #a1a1aa;
+    color: #B7ACC9;
   }
 
   .section-title.pink,
-  .section-title.gray { color: #a1a1aa; }
+  .section-title.gray { color: #B7ACC9; }
 
   .pipeline-flow {
     display: flex;
@@ -474,8 +474,8 @@
     gap: 6px;
     padding: 14px 12px;
     border-radius: 10px;
-    background: rgba(255,255,255,0.025);
-    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(196,181,253,0.025);
+    border: 1px solid rgba(196,181,253,0.06);
     min-width: 96px;
     text-align: center;
   }
@@ -484,18 +484,18 @@
     font-size: 9px;
     text-transform: uppercase;
     letter-spacing: 1px;
-    color: #a1a1aa;
+    color: #B7ACC9;
     font-weight: 600;
   }
 
   .pipeline-step .p-tool {
     font-family: 'JetBrains Mono', monospace;
     font-size: 10px;
-    color: #d4d4d8;
+    color: #B7ACC9;
   }
 
   .pipeline-arrow {
-    color: #3f3f46;
+    color: #9485AA;
     font-size: 16px;
     padding: 0 3px;
     flex-shrink: 0;
@@ -515,8 +515,8 @@
   }
 
   .combo-ex {
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(196,181,253,0.02);
+    border: 1px solid rgba(196,181,253,0.06);
     border-radius: 10px;
     padding: 14px 16px;
   }
@@ -524,13 +524,13 @@
   .combo-code {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
-    color: #e4e4e7;
+    color: #F1EDF8;
     margin-bottom: 4px;
   }
 
   .combo-desc {
     font-size: 11px;
-    color: #71717a;
+    color: #9485AA;
   }
 
   /* Infra bar */
@@ -548,10 +548,10 @@
     gap: 7px;
     padding: 8px 14px;
     border-radius: 50px;
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(196,181,253,0.02);
+    border: 1px solid rgba(196,181,253,0.06);
     font-size: 12px;
-    color: #71717a;
+    color: #9485AA;
   }
 
   /* Per-MCP identity dots — these stay colored, they're the diff features */
@@ -586,19 +586,19 @@
     gap: 10px;
     padding: 8px 14px;
     border-radius: 7px;
-    background: rgba(255,255,255,0.015);
-    border: 1px solid rgba(255,255,255,0.04);
+    background: rgba(196,181,253,0.015);
+    border: 1px solid rgba(196,181,253,0.04);
   }
 
   .shortcut-task {
     font-size: 12px;
-    color: #a1a1aa;
+    color: #B7ACC9;
     min-width: 130px;
     flex-shrink: 0;
   }
 
   .shortcut-arrow-sm {
-    color: #3f3f46;
+    color: #9485AA;
     font-size: 11px;
     flex-shrink: 0;
   }
@@ -606,7 +606,7 @@
   .shortcut-route {
     font-family: 'JetBrains Mono', monospace;
     font-size: 10px;
-    color: #d4d4d8;
+    color: #B7ACC9;
   }
 
   /* Footer */
@@ -614,8 +614,8 @@
     text-align: center;
     margin-top: 56px;
     padding-top: 28px;
-    border-top: 1px solid rgba(255,255,255,0.05);
-    color: #3f3f46;
+    border-top: 1px solid rgba(196,181,253,0.05);
+    color: #9485AA;
     font-size: 11px;
   }
 
@@ -633,45 +633,45 @@
     align-items: center;
     gap: 6px;
     font-size: 11px;
-    color: #3f3f46;
+    color: #9485AA;
   }
 
   .rel-arrow .dot {
     width: 4px;
     height: 4px;
     border-radius: 50%;
-    background: #3f3f46;
+    background: #9485AA;
   }
 
   .rel-label {
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 2px;
-    color: #52525b;
+    color: #9485AA;
     padding: 0 8px;
   }
 
   /* Native + Self-learning section helpers — pure mono */
-  .mono-section-title { color: #d4d4d8 !important; }
+  .mono-section-title { color: #B7ACC9 !important; }
 
   .mono-block-desc {
     text-align: center;
     font-size: 12px;
-    color: #71717a;
+    color: #9485AA;
     max-width: 680px;
     margin: 0 auto 20px auto;
     line-height: 1.5;
   }
 
   .mono-block-desc code {
-    color: #e4e4e7;
+    color: #F1EDF8;
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
   }
 
   .mono-combo-ex {
-    border-color: rgba(255,255,255,0.08) !important;
-    background: rgba(255,255,255,0.025) !important;
+    border-color: rgba(196,181,253,0.08) !important;
+    background: rgba(196,181,253,0.025) !important;
   }
 
   .phase-pill {
@@ -682,21 +682,21 @@
   }
 
   .phase-active {
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.2);
-    color: #f4f4f5;
+    background: rgba(196,181,253,0.08);
+    border: 1px solid rgba(196,181,253,0.2);
+    color: #F1EDF8;
   }
 
   .phase-pending {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: #a1a1aa;
+    background: rgba(196,181,253,0.04);
+    border: 1px solid rgba(196,181,253,0.1);
+    color: #B7ACC9;
   }
 
   .phase-future {
-    background: rgba(255,255,255,0.02);
-    border: 1px solid rgba(255,255,255,0.06);
-    color: #52525b;
+    background: rgba(196,181,253,0.02);
+    border: 1px solid rgba(196,181,253,0.06);
+    color: #9485AA;
   }
 
   @media (max-width: 900px) {

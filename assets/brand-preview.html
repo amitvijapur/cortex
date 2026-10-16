@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cortex visual identity</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 40px 24px; background: #17121f; color: #f1edf8; font: 16px/1.5 system-ui,sans-serif; }
+  main { max-width: 1040px; margin: auto; }
+  h1 { font-size: 28px; font-weight: 600; }
+  h2 { font-size: 16px; font-weight: 500; color: #c4b5fd; margin: 36px 0 12px; }
+  .headers { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .header { min-width: 0; padding: 20px; text-align: center; border-radius: 12px; }
+  .light { background: #fff; }
+  .dark { background: #0d1117; }
+  .header img { width: 260px; max-width: 100%; }
+  .diagram { display: block; width: 100%; height: auto; margin-bottom: 16px; }
+  a { color: #c4b5fd; }
+  @media (max-width: 600px) { body { padding: 24px 12px; } .headers { grid-template-columns: 1fr; } }
+</style>
+<main>
+  <h1>Cortex visual identity</h1>
+  <p>Flat violet mark, matching lettering, and documentation graphics.</p>
+  <div class="headers">
+    <div class="header light"><img src="cortex-logo.svg" alt="Cortex header on a light background"></div>
+    <div class="header dark"><img src="cortex-logo-light.svg" alt="Cortex header on a dark background"></div>
+  </div>
+  <h2>README hero</h2>
+  <img class="diagram" src="cortex-hero.svg" alt="One task becomes a chosen route through Cortex">
+  <h2>Stack overview</h2><img class="diagram" src="stack-overview.svg" alt="Stack overview">
+  <h2>Setup</h2><img class="diagram" src="cortex-setup.svg" alt="Setup flow">
+  <h2>Context cost</h2><img class="diagram" src="context-cost.svg" alt="Context cost">
+  <h2>Routing protocol</h2><img class="diagram" src="routing-protocol.svg" alt="Routing protocol">
+  <h2>Effort tiers</h2><img class="diagram" src="tier-ladder.svg" alt="Effort tiers">
+  <h2>Append-only log</h2><img class="diagram" src="append-only-log.svg" alt="Append-only log">
+  <h2>Learning loop</h2><img class="diagram" src="self-learning.svg" alt="Learning loop">
+  <h2>Evidence</h2><img class="diagram" src="evidence-layer.svg" alt="Evidence checks">
+  <h2>Parallel work</h2><img class="diagram" src="fan-out.svg" alt="Parallel work">
+  <p>Related explainers: <a href="cortex-flowchart.html">workflow</a> · <a href="cortex-vs-council.html">council comparison</a>.</p>
+</main>
+</html>
