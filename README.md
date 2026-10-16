@@ -170,6 +170,8 @@ Optional resources include the [Jev routing adviser](docs/jev-adviser.md), which
 
 Issues and pull requests are welcome. Include a concrete task, the expected behavior and what you observed. For documentation changes, check local links and keep examples consistent with the CLI. For routing changes, read [the routing guide](docs/routing.md) and run the relevant [evaluation checks](eval/README.md).
 
+Maintainers can find the running work log and lessons in [maintainer notes](docs/maintainers/README.md).
+
 ## Credits
 
 Cortex routes between tools built by their own maintainers. The [ecosystem examples and credits](docs/registry.md#ecosystem-examples) link to those projects. They are optional examples you can adapt to your own setup.

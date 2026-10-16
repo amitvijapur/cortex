@@ -111,6 +111,7 @@ The following projects appeared in the original personal registry. Their links a
 | `examples/cortex.md` | Populated registry for reference |
 | `eval/` | Adherence, routing consistency, retrieval checks and CLI tests |
 | `docs/` | Setup, protocol, history, evaluation and optional-feature guides |
+| [`docs/maintainers/`](maintainers/README.md) | Maintainer work log, plans, reviews and lessons |
 | `assets/` | Violet identity and explanatory SVG diagrams |
 | `frontend/` | Separate frontend reference library |
 | `install.sh` | Local installer |
