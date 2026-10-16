@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/cortex-logo.png" alt="Cortex logo" width="130" />
+<img src="assets/cortex-logo-synchronous.png" alt="Cortex logo: five blue paths moving around a shared centre" width="130" />
 
 # Cortex
 
