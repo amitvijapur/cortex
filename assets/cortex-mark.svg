@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="-256 -256 512 512" role="img" aria-labelledby="cortex-mark-title cortex-mark-desc">
+  <title id="cortex-mark-title">Cortex mark</title>
+  <desc id="cortex-mark-desc">Five identical narrow violet arms sweep clockwise around a thin central ring with one circular opening.</desc>
+  <defs>
+    <!-- Canonical arm. Keep this path and the five rotations in sync with cortex-hero.svg.
+         The outer joins lie on r=56, 72 degrees apart, with matching tangents.
+         The base returns along r=45, overlapping the ring without entering its r=44 hole. -->
+    <path id="cortex-arm" d="M -17.304952 -53.259165 C 11.987589 -62.776888 29 -67 30 -93 C 33 -122 17 -150 -11 -165 C -27 -173 -36 -182 -36 -198 C -36 -219 -20 -236 0 -236 C 25 -236 43 -213 49 -183 C 57 -146 50 -108 52 -76 C 53 -58 27.201166 -57.833698 45.304952 -32.915974 L 36.405765 -26.450336 A 45 45 0 0 0 -13.905765 -42.797543 Z"/>
+  </defs>
+  <g fill="#8B5CF6">
+    <path fill-rule="evenodd" d="M 56 0 A 56 56 0 1 1 -56 0 A 56 56 0 1 1 56 0 Z M 44 0 A 44 44 0 1 0 -44 0 A 44 44 0 1 0 44 0 Z"/>
+    <use href="#cortex-arm" transform="rotate(0)"/>
+    <use href="#cortex-arm" transform="rotate(72)"/>
+    <use href="#cortex-arm" transform="rotate(144)"/>
+    <use href="#cortex-arm" transform="rotate(216)"/>
+    <use href="#cortex-arm" transform="rotate(288)"/>
+  </g>
+</svg>

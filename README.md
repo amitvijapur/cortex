@@ -1,20 +1,23 @@
 <div align="center">
 
-<img src="assets/cortex-logo-synchronous.png" alt="Cortex logo: five blue paths moving around a shared centre" width="130" />
-
-# Cortex
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/cortex-logo-light.svg" />
+    <img src="assets/cortex-logo.svg" alt="Cortex" width="260" />
+  </picture>
+</h1>
 
 **A meta-router for coding agents.** It sits above every workflow system in your stack and decides, per task, which system runs, which specialist drives, and how much effort the work deserves. Then it logs the decision, learns from the outcome, and ships the checks that tell you whether any of that is actually happening.
 
 <sub>Built for **Claude Code** · runs on **Cursor, Codex, Gemini CLI, Aider & Windsurf** too. [See how ↓](#using-cortex-with-other-agents)</sub>
 
-<img src="assets/cortex-hero.png" alt="Cortex routes each task to the right system" width="820" />
+<img src="assets/cortex-hero.svg" alt="Cortex selects a workflow, specialist and effort level for a task" width="820" />
 
-[![built for Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-2c5282?style=flat-square)](https://claude.com/claude-code)
-&nbsp;![works with any coding agent](https://img.shields.io/badge/also_runs_on-Cursor%20·%20Codex%20·%20Gemini%20·%20Aider-2f855a?style=flat-square)
-&nbsp;![effort L1–L4](https://img.shields.io/badge/effort-L1%E2%80%93L4-4a9eff?style=flat-square)
-&nbsp;![self-learning loop](https://img.shields.io/badge/self--learning-loop-63b3ed?style=flat-square)
-&nbsp;![license MIT](https://img.shields.io/badge/license-MIT-64748b?style=flat-square)
+[![built for Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-8B5CF6?style=flat-square&labelColor=1A1526)](https://claude.com/claude-code)
+&nbsp;![works with any coding agent](https://img.shields.io/badge/also_runs_on-Cursor%20·%20Codex%20·%20Gemini%20·%20Aider-6D42B8?style=flat-square&labelColor=1A1526)
+&nbsp;![effort L1–L4](https://img.shields.io/badge/effort-L1%E2%80%93L4-8B5CF6?style=flat-square&labelColor=1A1526)
+&nbsp;![self-learning loop](https://img.shields.io/badge/self--learning-loop-7C4DCC?style=flat-square&labelColor=1A1526)
+&nbsp;![license MIT](https://img.shields.io/badge/license-MIT-695F7C?style=flat-square&labelColor=1A1526)
 
 </div>
 
