@@ -352,6 +352,21 @@
 **Strengths:** Browser debugging, performance auditing, accessibility testing
 **Best for:** Visual QA, Lighthouse audits, network debugging, a11y checks
 
+### Argon (ask-argon, optional Codex bridge)
+**Installed:** Optional local integration, not bundled with Cortex. Requires the installed `ask-argon` skill to be exposed in the current session, its configured local bridge, and an authenticated Antigravity CLI with the required account entitlement.
+**Strengths:** Bounded Argon second opinions returned to the current Codex task for parent review.
+**Best for:** Explicit user requests for Argon, a Gemini second opinion, or a Codex-to-Argon call.
+
+| Pattern | Use When |
+|---------|----------|
+| `$ask-argon` | The user explicitly requests Argon, a Gemini second opinion, or Codex-to-Argon, and the skill is currently exposed. Read the installed skill and use its configured bridge location and invocation. |
+
+**Routing gate:** Registry presence alone is not callability or authorization. If the skill is unavailable, report the limitation rather than installing or invoking a guessed command. Keep native delegation and configured host model defaults for ordinary subtasks. This route is not an automatic council, reviewer, or fallback for uncertainty or higher effort tiers.
+
+**Model and usage:** Follow the installed skill's explicitly pinned models: `gemini-4-argon-medium` by default, or `--effort high` for `gemini-4-argon-high` when deeper reasoning is useful. Cortex tiers do not select these models. Usage is subscription-backed and subject to account quotas, not guaranteed free or unlimited. On authentication, entitlement, quota, or model-selection errors, report the error and stop dependent work. Do not silently substitute another model, fall back to an API, buy credits, upgrade plans, or enable API billing.
+
+**Context and review:** Send only the minimum task-authorized prompt context, without secrets. The bridge uses a fresh temporary workspace with no project files automatically supplied. This is context isolation, not a security sandbox; cached credentials and CLI configuration remain accessible. Do not grant project-directory access unless requested. The parent Codex task reviews the output and retains integration, correctness, and final judgment. Only an accepted explicitly pinned model request with a successful response verifies an Argon call; a model list or answer self-identification does not.
+
 ### Direct Execution
 **Strengths:** Zero overhead
 **Best for:** Quick edits, lookups, single-file changes, casual questions, git operations
@@ -372,6 +387,7 @@
 | Long session / context-heavy | GSD > /gsd-do (context rot prevention) | L2 |
 | Resume previous work | GSD > /gsd-resume-work | L2 |
 | Code review | ECC > code-review | L2 |
+| Explicit request for Argon / Gemini second opinion / Codex-to-Argon | Argon > `ask-argon`, optional exposed Codex skill; bounded prompt and parent review, registry gates above apply | L2 |
 | PR workflow | ECC > pr-review-toolkit | L2 |
 | Hardcoded secret scan (pre-commit / CI gate) | Direct > gitleaks (deterministic) — pair with Security Engineer for deep review | L1 |
 | Security audit | OMC > /ccg attack-surface pass → ralplan > Security Engineer + defending-code harness | L4 |
