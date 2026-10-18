@@ -12,3 +12,9 @@ for setup and behavior.
 
 These are the canonical locations for repository planning and lessons. Keep
 maintainer notes here so the repository root stays focused on the product.
+
+## Release maintenance
+
+- [Social preview](social-preview.md) covers the image source, export and GitHub setting.
+- [Contributor verification](verification.md) describes the offline checks and CI matrix.
+- [Update and release checklist](../maintenance.md#first-release-checklist) covers versioned publication.

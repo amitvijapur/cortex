@@ -1,0 +1,39 @@
+name: Bug report
+description: Report a reproducible Cortex failure.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove credentials, private paths, project names and task content from examples. Share a small reproduction rather than your full routing log or inventory.
+  - type: input
+    id: version
+    attributes:
+      label: Cortex version or commit
+      description: The release tag, or `git rev-parse --short HEAD` from your checkout.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Operating system, Python version and agent host
+      placeholder: macOS, Python 3.14, Codex
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include the smallest sanitized command or task that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Relevant sanitized output
+      description: Optional. Remove tokens, private task text and personal information before posting.

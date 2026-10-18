@@ -25,6 +25,12 @@ Cortex is **Markdown instructions plus a Python CLI**. Your coding agent follows
 
 ## A routing example
 
+<p align="center"><img src="assets/cortex-demo.gif" alt="Recorded offline CLI walkthrough with scripted route inputs and real Cortex output" width="880" /></p>
+
+The [recorded CLI walkthrough](docs/demo.md) shows a route, its saved outcome
+and its history using real commands in disposable state. Inputs are scripted;
+no model is invoked. The example below illustrates a task your agent could route.
+
 You ask your agent to refactor authentication middleware. Before implementation, it declares a route and explains the verification it needs:
 
 ```text
@@ -56,7 +62,7 @@ Start with the tools you already have. You can add workflow systems to your regi
 
 ## Quick start
 
-The guided path below is for **Claude Code on macOS or Linux**, with Python 3 and Git available. For other agents, see [integration options](#using-cortex-with-other-agents).
+The guided path below is for **Claude Code on macOS or Linux**, with Python 3.11 or newer and Git available. For other agents, see [integration options](#using-cortex-with-other-agents).
 
 **1. Install the instructions, CLI and skills.**
 
@@ -65,6 +71,9 @@ git clone https://github.com/amitvijapur/cortex.git
 cd cortex
 ./install.sh
 ```
+
+For a complete host-specific trial, follow [your first routed task](docs/first-run.md).
+A [minimal registry](examples/minimal-registry.md) starts with your agent's normal tools.
 
 The installer preserves an existing `cortex.md` and checks for skill conflicts before copying. See [what gets installed](docs/setup.md) for destinations, custom paths and conflict handling.
 
@@ -157,7 +166,9 @@ These checks catch regressions. They do not establish that a route was optimal, 
 
 | Guide | What you will find |
 | --- | --- |
+| [First routed task](docs/first-run.md) | Guided Claude Code setup, manual Codex setup and a concrete acceptance check. |
 | [Setup](docs/setup.md) | Install destinations, other agents, custom state, troubleshooting and the optional session-start audit. |
+| [Update or remove](docs/maintenance.md) | Pin a release, back up, update, roll back or selectively remove Cortex. |
 | [CLI reference](docs/cli.md) | Logging, hints, outcomes, corrections, history and checks. |
 | [Routing](docs/routing.md) | Protocol, calibration, parallel work and capability boundaries. |
 | [Registry](docs/registry.md) | Adding workflows, managing context and ecosystem examples with credits. |
@@ -168,7 +179,14 @@ Optional resources include the [Jev routing adviser](docs/jev-adviser.md), which
 
 ## Contributing
 
-Issues and pull requests are welcome. Include a concrete task, the expected behavior and what you observed. For documentation changes, check local links and keep examples consistent with the CLI. For routing changes, read [the routing guide](docs/routing.md) and run the relevant [evaluation checks](eval/README.md).
+[Contribution guidance](CONTRIBUTING.md) covers local checks and pull requests.
+Run `bash scripts/run_checks.sh` for the same offline checks as CI. See
+[verification and the platform matrix](docs/maintainers/verification.md) for scope.
+
+Trying Cortex for the first time? Follow the [first-run feedback checklist](docs/adoption-feedback.md)
+and report where setup became confusing. Failed or assisted attempts are useful feedback.
+[Releases](https://github.com/amitvijapur/cortex/releases) and the [changelog](CHANGELOG.md)
+identify versioned snapshots.
 
 Maintainers can find the running work log and lessons in [maintainer notes](docs/maintainers/README.md).
 

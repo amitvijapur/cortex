@@ -2,9 +2,12 @@
 
 The [README quick start](../README.md#quick-start) covers the default Claude Code installation. This guide explains the files it installs, manual integration with other agents, and optional state and audit configuration.
 
+For a step-by-step host trial, use [your first routed task](first-run.md).
+A [minimal registry](../examples/minimal-registry.md) avoids requiring an orchestrator.
+
 ## What the installer changes
 
-Run `./install.sh` from the repository with Bash and Python 3 available. The default state directory is `~/.claude`. The installer creates missing installation directories and an empty routing log, preserves an existing `cortex.md`, and leaves `settings.json` alone.
+Run `./install.sh` from the repository with Bash and Python 3.11 or newer available. The default state directory is `~/.claude`. The installer creates missing installation directories and an empty routing log, preserves an existing `cortex.md`, and leaves `settings.json` alone.
 
 | Source | Destination |
 |---|---|
@@ -103,3 +106,7 @@ Merge this into the existing `~/.claude/settings.json` hooks rather than replaci
 - [CLI reference](cli.md) for daily use and audits.
 - [Optional Jev adviser](jev-adviser.md), off by default, with a separate setup and rollback procedure.
 - [Frontend Design Library](../frontend/README.md), a separate resource library with its own `scripts/install_frontend_library.sh` installer. Its installer leaves the Cortex CLI and routing configuration intact.
+
+## Update and removal
+
+See [update, pin or remove Cortex](maintenance.md) for backups, reviewed template merges, rollback and selective removal. The installed files and checkout are separate. Keep your registry and history by default.
