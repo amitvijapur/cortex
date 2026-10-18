@@ -14,6 +14,11 @@ runners include Node.js. Social-card and demo rendering are separate maintainer
 tasks, so contributors do not need graphics libraries to check a documentation
 change.
 
+Use a Git clone with full history. One installer regression loads a previously
+shipped skill from Git history to verify upgrades and preservation of local
+edits. CI therefore fetches full history. If you used a shallow clone, run
+`git fetch --unshallow` before running the checks.
+
 ## What runs
 
 | Suite | Scope |
