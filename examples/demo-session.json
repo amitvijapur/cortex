@@ -10,9 +10,9 @@
   "normalization": {
     "<route-id>": "The exact generated route event ID, substituted consistently in commands and output",
     "<run-id>": "Generated CLI invocation ID",
-    "<process-session>": "Parent-process fallback identity; no agent session is inherited",
     "<demo-project>": "Canonical disposable project directory",
-    "<time>": "UTC date and minute printed by the CLI"
+    "<time>": "UTC date and minute printed by the CLI",
+    "omitted_process_session": "Only the optional history session_ref line containing a verified ppid_<10 hex> fallback is omitted; ps availability varies by host"
   },
   "checks": [
     "fresh history",

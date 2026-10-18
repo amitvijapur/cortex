@@ -5,6 +5,7 @@ Default: replay and write examples/demo-session.json. --gif also renders the
 capture using optional Pillow. --check replays and verifies without writing.
 """
 import argparse
+import difflib
 import hashlib
 import json
 import os
@@ -35,7 +36,7 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
-def replay():
+def replay(process_path=None, expect_process_session=None):
     """No inherited agent/provider environment or writes to personal state."""
     base = "/private/tmp" if sys.platform == "darwin" else None
     with tempfile.TemporaryDirectory(prefix="cortex-demo-", dir=base) as tmp:
@@ -43,16 +44,21 @@ def replay():
         project = Path(tmp) / "demo-project"
         project.mkdir()
         # These are the only environment variables passed to child processes.
-        env = {"PATH": os.defpath, "LANG": "C.UTF-8", "CORTEX_HOME": str(state)}
+        env = {"PATH": process_path or os.defpath, "LANG": "C.UTF-8", "CORTEX_HOME": str(state)}
         steps = []
         substitutions = {str(project.resolve()): "<demo-project>"}
 
-        def normalized(value):
+        def normalized(value, omit_process_session=False):
             for actual, label in substitutions.items():
                 value = value.replace(actual, label)
             value = re.sub(r"\b\d{4}-\d{2}-\d{2} \d{2}:\d{2}\b", "<time>", value)
             value = re.sub(r"run_[a-f0-9]{12}\b", "<run-id>", value)
-            value = re.sub(r"ppid:\d+\b", "<process-session>", value)
+            # ps can succeed on Linux CI and be unavailable in a macOS sandbox.
+            # Omit only this process-derived history field, never a native or
+            # user-supplied session identity or any route/outcome content.
+            if omit_process_session:
+                value = re.sub(r"^  session_ref:  ppid_[a-f0-9]{10}\n", "", value,
+                               flags=re.MULTILINE)
             return value
 
         def execute(step_id, label, args, python_code=False):
@@ -80,7 +86,16 @@ def replay():
             "event": "route", "task": TASK, "system": "Direct", "pattern": "cli-walkthrough",
             "tier": "L2", "tier_reason": REASON, "class": "build", "outcome": None,
             "project_ref": str(project.resolve()), "model": None,
+            "host": "unknown", "host_source": None,
         }.items()), "Recorded route differs from the declared walkthrough")
+        session = route.get("session_ref")
+        require((session is None and route.get("session_ref_source") is None)
+                or (isinstance(session, str) and re.fullmatch(r"ppid_[a-f0-9]{10}", session)
+                    and route.get("session_ref_source") == "ppid"),
+                "Isolated route must have only an optional process-derived session identity")
+        if expect_process_session is not None:
+            require(bool(session) == expect_process_session,
+                    f"ps portability fixture did not produce expected session availability: {expect_process_session}")
         event_id = route["event_id"]
         require(bool(re.fullmatch(r"[a-z]+_[a-f0-9]+", event_id)), "Expected an exact route event ID")
         substitutions[event_id] = "<route-id>"
@@ -106,7 +121,7 @@ def replay():
                 "history must show the real outcome event and its scope note")
         for step in steps:
             step["command"] = [normalized(arg) for arg in step["command"]]
-            step["stdout"] = normalized(step["stdout"])
+            step["stdout"] = normalized(step["stdout"], omit_process_session=step["id"] == "history")
             step["stderr"] = normalized(step["stderr"])
         return {
             "schema_version": 1,
@@ -120,7 +135,7 @@ def replay():
             "normalization": {
                 "<route-id>": "The exact generated route event ID, substituted consistently in commands and output",
                 "<run-id>": "Generated CLI invocation ID",
-                "<process-session>": "Parent-process fallback identity; no agent session is inherited",
+                "omitted_process_session": "Only the optional history session_ref line containing a verified ppid_<10 hex> fallback is omitted; ps availability varies by host",
                 "<demo-project>": "Canonical disposable project directory",
                 "<time>": "UTC date and minute printed by the CLI",
             },
@@ -129,6 +144,49 @@ def replay():
                        "show and history reflect walkthrough completion"],
             "steps": steps,
         }
+
+
+def compare_capture(expected, observed, path="capture"):
+    """Report the precise changed field, with readable output diffs."""
+    if expected == observed:
+        return
+    if isinstance(expected, dict) and isinstance(observed, dict):
+        require(expected.keys() == observed.keys(),
+                f"{path} fields differ: captured={sorted(expected)}, observed={sorted(observed)}")
+        for key in expected:
+            compare_capture(expected[key], observed[key], f"{path}.{key}")
+    elif isinstance(expected, list) and isinstance(observed, list):
+        require(len(expected) == len(observed),
+                f"{path} length differs: captured={len(expected)}, observed={len(observed)}")
+        for index, (left, right) in enumerate(zip(expected, observed)):
+            label = f"{index}:{left['id']}" if isinstance(left, dict) and "id" in left else str(index)
+            compare_capture(left, right, f"{path}[{label}]")
+    else:
+        before = expected if isinstance(expected, str) else json.dumps(expected, ensure_ascii=False)
+        after = observed if isinstance(observed, str) else json.dumps(observed, ensure_ascii=False)
+        diff = "".join(difflib.unified_diff(before.splitlines(keepends=True),
+                    after.splitlines(keepends=True), fromfile="captured", tofile="observed"))
+        require(False, f"{path} differs from the current CLI contract:\n{diff}")
+
+
+def check_contract(saved, observed):
+    # Historical timestamp/random-ID bytes are deliberately not compared.
+    fields = ("schema_version", "kind", "disclosure", "task", "route", "outcome_scope",
+              "normalization", "checks", "steps")
+    for field in fields:
+        compare_capture(saved.get(field), observed.get(field), f"capture.{field}")
+
+
+def check_process_portability(saved):
+    """Replay real CLI subprocesses with both successful and unavailable ps."""
+    base = "/private/tmp" if sys.platform == "darwin" else None
+    with tempfile.TemporaryDirectory(prefix="cortex-demo-ps-", dir=base) as tmp:
+        ps = Path(tmp) / "ps"
+        process_path = str(ps.parent) + os.pathsep + os.defpath
+        for available, body in ((False, "exit 1"), (True, "printf '%s\\n' 'Thu Jan  1 00:00:00 2026'")):
+            ps.write_text("#!/bin/sh\n" + body + "\n")
+            ps.chmod(0o700)
+            check_contract(saved, replay(process_path=process_path, expect_process_session=available))
 
 
 def render_gif(capture):
@@ -200,12 +258,10 @@ def main():
     observed = replay()
     if args.check:
         saved = json.loads(CAPTURE.read_text())
-        # Nondeterministic provenance is normalized consistently. This checks the
-        # accepted captured contract, not historical timestamp or random-ID bytes.
-        for field in ("schema_version", "kind", "disclosure", "task", "route", "outcome_scope",
-                      "normalization", "checks", "steps"):
-            require(saved.get(field) == observed.get(field), f"Captured {field} differs from the current CLI contract")
-        print("CLI walkthrough verified: 7 real commands; isolated route and append-only outcome; capture contract current.")
+        check_contract(saved, observed)
+        check_process_portability(saved)
+        print("CLI walkthrough verified: 7 real commands per replay; isolated route and append-only outcome; "
+              "capture contract current with ps available and unavailable.")
         return
     CAPTURE.parent.mkdir(exist_ok=True)
     CAPTURE.write_text(json.dumps(observed, indent=2, ensure_ascii=False) + "\n")
