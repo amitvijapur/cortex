@@ -1,0 +1,41 @@
+name: First-run feedback
+description: Tell us where installation or your first routed task became confusing.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Trying Cortex for the first time is useful feedback. Please do not paste credentials, a full inventory, private tasks or your full routing log.
+  - type: input
+    id: environment
+    attributes:
+      label: Operating system, Python version and agent host
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Cortex version or commit
+  - type: dropdown
+    id: stage
+    attributes:
+      label: How far did you get?
+      options:
+        - Reading the README
+        - Installing Cortex
+        - Configuring my host or registry
+        - Completing my first routed task
+        - Reviewing the saved outcome
+    validations:
+      required: true
+  - type: textarea
+    id: experience
+    attributes:
+      label: What worked, and where did you get stuck?
+      description: Mention the guide and step. A short sanitized example helps.
+    validations:
+      required: true
+  - type: textarea
+    id: usefulness
+    attributes:
+      label: What would make Cortex useful in your setup?
+      description: Optional. Describe the workflow you hoped it would help with.

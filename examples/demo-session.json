@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "kind": "scripted_cli_walkthrough",
+  "disclosure": "CLI walkthrough · scripted inputs · real output · no model invoked",
+  "task": "Record a local Cortex CLI walkthrough",
+  "route": "Direct > cli-walkthrough @ L2",
+  "outcome_scope": "CLI walkthrough completed; no software changed",
+  "cli_sha256": "9b627488d0423aa3994e6f66d5004a2b0f60a59f33167a28fdd648cd30a8466d",
+  "command_alias": "cortex = the running Python interpreter plus <repo>/bin/cortex",
+  "normalization": {
+    "<route-id>": "The exact generated route event ID, substituted consistently in commands and output",
+    "<run-id>": "Generated CLI invocation ID",
+    "<process-session>": "Parent-process fallback identity; no agent session is inherited",
+    "<demo-project>": "Canonical disposable project directory",
+    "<time>": "UTC date and minute printed by the CLI"
+  },
+  "checks": [
+    "fresh history",
+    "declared route persisted",
+    "exact event reference",
+    "route visible before outcome",
+    "outcome appended without rewriting route",
+    "show and history reflect walkthrough completion"
+  ],
+  "steps": [
+    {
+      "id": "hint",
+      "label": "Start with an empty history",
+      "command": [
+        "cortex",
+        "hint",
+        "Record a local Cortex CLI walkthrough",
+        "--class",
+        "build"
+      ],
+      "stdout": "cortex log is empty — no hint available yet\n",
+      "stderr": "",
+      "exit_code": 0
+    },
+    {
+      "id": "log",
+      "label": "Record the scripted route",
+      "command": [
+        "cortex",
+        "log-line",
+        "Direct > cli-walkthrough @ L2",
+        "Record a local Cortex CLI walkthrough",
+        "--class",
+        "build",
+        "--tier-reason",
+        "Bounded local demonstration with focused checks",
+        "--project",
+        "cortex-demo"
+      ],
+      "stdout": "",
+      "stderr": "logged: Direct > cli-walkthrough @ L2\n",
+      "exit_code": 0
+    },
+    {
+      "id": "reference",
+      "label": "Read the exact route ID from the isolated log",
+      "command": [
+        "python3",
+        "-c",
+        "import json, os; from pathlib import Path; rows = (Path(os.environ[\"CORTEX_HOME\"]) / \"cortex-log.jsonl\").read_text().splitlines(); print(json.loads(rows[-1])[\"event_id\"])"
+      ],
+      "stdout": "<route-id>\n",
+      "stderr": "",
+      "exit_code": 0
+    },
+    {
+      "id": "before",
+      "label": "Inspect the route before completion",
+      "command": [
+        "cortex",
+        "show",
+        "--last",
+        "1"
+      ],
+      "stdout": "<time> [cortex-demo] build\n  task:  Record a local Cortex CLI walkthrough\n  route: Direct > cli-walkthrough @ L2\n  why:   tier: Bounded local demonstration with focused checks\n\n[showing last 1 — 1 total]\n",
+      "stderr": "",
+      "exit_code": 0
+    },
+    {
+      "id": "outcome",
+      "label": "Complete the CLI walkthrough",
+      "command": [
+        "cortex",
+        "outcome",
+        "shipped",
+        "--ref",
+        "<route-id>",
+        "--note",
+        "CLI walkthrough completed; no software changed"
+      ],
+      "stdout": "marked outcome: Direct > cli-walkthrough @ L2  → shipped\n",
+      "stderr": "",
+      "exit_code": 0
+    },
+    {
+      "id": "show",
+      "label": "Review the recorded outcome",
+      "command": [
+        "cortex",
+        "show",
+        "--last",
+        "1"
+      ],
+      "stdout": "<time> [cortex-demo] build  [SHIPPED]\n  task:  Record a local Cortex CLI walkthrough\n  route: Direct > cli-walkthrough @ L2\n  why:   tier: Bounded local demonstration with focused checks\n\n[showing last 1 — 1 total]\n",
+      "stderr": "",
+      "exit_code": 0
+    },
+    {
+      "id": "history",
+      "label": "Inspect the append-only event history",
+      "command": [
+        "cortex",
+        "history",
+        "<route-id>"
+      ],
+      "stdout": "<time> [cortex-demo] build  [SHIPPED]\n  task:  Record a local Cortex CLI walkthrough\n  route: Direct > cli-walkthrough @ L2\n  why:   tier: Bounded local demonstration with focused checks\n  id:    <route-id>\n  run_id:       <run-id>\n  project_ref:  <demo-project>\n  corrections (1, oldest first):\n    <time>  outcome    outcome → shipped  (CLI walkthrough completed; no software changed)\n\n",
+      "stderr": "",
+      "exit_code": 0
+    }
+  ]
+}
