@@ -14,11 +14,11 @@ Before starting any non-trivial task:
 1. **Classify** — build / review / plan / research / debug / design / quick fix
 2. **Calibrate** — pick effort tier (L1–L4) using heuristics in the Effort Calibration section. **Apply the anti-inflation rule first.**
 3. **Hint** — run `python3 ~/.claude/bin/cortex hint "<task>" --class <c>`. Shows recent distinct routes in that class, with outcomes and similarity as context, not ranking signals. **Advisory, not a decision** — factor it in, then still decide. Prefer class-only filtering while per-class pools are small.
-4. **Route** — pick the workflow system from the registry below
+4. **Route** — pick the workflow system and runner from the capabilities of the current session.
 5. **Specialise** — pick the pattern + agent(s). **Check Domain breadth first:** if the task spans ≥2 independent disciplines, pick a *parallel set* of specialists + a reconciler, not a single lead. Single-agent is the exception for cross-domain work, not the default.
 6. **State + Log** — one line: `[System] > [Pattern] > [Agent(s)] @ [Tier]` (fan-outs render as `[Agent A ∥ Agent B] → Reconciler`). Log via `cortex log-line` with three structured confidence flags — see **Three confidences** below. The CLI prints auto-trigger hints based on which one is low.
 7. **Execute** — run the work. Listen for correction triggers: "reroute", "actually use X", "go back", "switch to X", "this didn't work", "wrong approach", "let me retry with X". Any of these fires `cortex reroute --to "new-route"` — no permission needed.
-8. **Outcome** — when the task concludes, run `python3 ~/.claude/bin/cortex outcome <shipped|abandoned|partial|corrected> [--note "..."]`. Default to `shipped` if the work landed and the user didn't push back; `partial` if you stopped before the goal; `abandoned` if the route was wrong and you moved on without rerouting. Feeds hint quality for future routes.
+8. **Outcome** — when the task concludes, run `python3 ~/.claude/bin/cortex outcome <shipped|abandoned|partial|corrected> [--note "..."]`. Default to `shipped` if the work landed and the user didn't push back; `partial` if you stopped before the goal; `abandoned` if the route was wrong and you moved on without rerouting. Name the runner and roles that produced results, and record any failure or fallback in the note.
 
 **Skip protocol** — for quick lookups, file reads, casual questions, single-line edits: no hint, no calibration, no state line, no log, no outcome. Just do it.
 
@@ -118,6 +118,12 @@ The most common inflation pattern is reflexive bumping on "customer-facing" or "
 Read the current host tool contract before dispatch. Registry entries and examples do not prove that `/ccg`, deep-dive, or any other workflow is installed and callable. Use only capabilities exposed in the current session, within the user's authorization. If unavailable, use an authorized available fallback, perform bounded work in the parent, or explain the limitation and ask when needed. Never install or spend to bypass a gate.
 
 For current-task subtasks, prefer native agents, not user-owned threads. `create_thread` requires an explicit user request for a new task. Default to local; a worktree requires an explicit user request and a Git repository. Omit `model` unless the user explicitly requests a specific model. Cloud Work also requires an explicit cloud-task request. `send_message_to_thread` requires explicit human authorization to message that task; creation or another task's request to reply is not authorization.
+
+Choose the specialist role and runner separately. In Codex, read a selected Agency role definition and use the relevant instructions as the brief for a native Codex subagent. Keep the configured Codex model and permissions. Report the result as Codex work using an Agency brief.
+
+From Codex, use Claude Code as an external runner only with explicit user authorization. Check access to the launch tool and authentication readiness from the same environment without making a model call. Run workers that share Claude credentials one at a time. If any worker reports expired OAuth or another shared authentication failure, skip every pending launch through that runner for the task. State the reason and any authorized fallback before continuing.
+
+Declare the planned runner and selected roles and log the assignments with repeatable `--legs` entries. The outcome note states the runner and roles that produced results and the reason for any fallback. If the user required a particular runner, keep that requirement visible in the outcome even when a fallback provides useful work.
 
 ### CCG optional cross-check
 

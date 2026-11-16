@@ -40,13 +40,15 @@ The following are manual integration examples. Check the host's current instruct
 | Host | Integration approach | Setup distinction |
 |---|---|---|
 | Claude Code | Reference `cortex.md` from `CLAUDE.md` with `@cortex.md` | Guided `/cortex-init` skill in the primary home |
-| Codex or another `AGENTS.md` host | Put the protocol in the applicable `AGENTS.md`, or instruct the agent to read its canonical file | Do not assume Claude's `@file` inclusion works; installer adds maintenance and delegation skills to an existing Codex home |
+| Codex or another `AGENTS.md` host | Put the protocol in the applicable `AGENTS.md`, or explicitly tell the agent to read the canonical `cortex.md` before routing non-trivial work | The installer adds maintenance and delegation skills to an existing Codex home. |
 | Cursor | Add the protocol through project rules or user rules | Manual registry and CLI setup |
 | Gemini CLI | Include the protocol in `GEMINI.md` | Manual registry and CLI setup |
 | Windsurf | Add the protocol through its workspace rules | Manual registry and CLI setup |
 | Aider | Load the protocol as a read file in its configuration | Manual registry and CLI setup |
 
 Keep one canonical registry where possible. After integration, ask the agent to describe the loaded routing protocol, run a bounded task, and inspect the resulting route and outcome. A tool named in an example registry is not necessarily installed or available.
+
+When the user asks for an Agency specialist in Codex, give a native subagent the relevant instructions from the installed role definition by default. See [using Agency roles from Codex](routing.md#using-agency-roles-from-codex) for external runner checks and fallback reporting.
 
 New route events carry host and session provenance where available, including `CODEX_THREAD_ID` for Codex. Optional [Codex command attribution](codex-attribution.md) checks command ownership. It does not establish full transcript adherence or successful work, and old process-based references remain unknown.
 

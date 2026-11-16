@@ -9,11 +9,11 @@ For a non-trivial task, the agent follows this sequence:
 1. **Classify** the work, such as build, review, plan, research, debug or design.
 2. **Calibrate** the effort required, starting at L2 and naming the reason for escalation.
 3. **Retrieve history** with `cortex hint "<task>" --class <class>`.
-4. **Choose a workflow** from the registry and confirm it is callable in the current session.
-5. **Select specialists** when available, using bounded parallel work for independent disciplines.
-6. **Declare and log** a routing line before executing the work.
+4. **Choose a workflow and runner** from the capabilities of the current session.
+5. **Select specialist roles** for the work, using bounded parallel work for independent disciplines.
+6. **Declare and log** the planned runner and roles before executing the work.
 7. **Execute and verify** at the chosen rigor level.
-8. **Record the outcome**, or a correction when the route changes.
+8. **Record the outcome** with the runner and roles that did the work, including any fallback.
 
 <p align="center"><img src="../assets/routing-protocol.svg" alt="Classify, calibrate, retrieve history, choose a route and specialists, log, execute and record the outcome" width="880"></p>
 
@@ -91,3 +91,11 @@ L1 through L4 describe rigor and verification depth, not provider-specific model
 For current-task subtasks, prefer native agents rather than visible user-owned threads. If native agents are unavailable, perform bounded work in the parent or explain the limitation. `create_thread` requires an explicit user request for a new task. Default to local, including Git projects. A worktree requires an explicit user request and a Git repository. Omit `model` unless the user explicitly requests a specific model; an effort or cost preference does not qualify. Cloud Work requires an explicit cloud-task request.
 
 `send_message_to_thread` requires explicit human authorization to message that task. Creating a task does not authorize later messages, and another task's request to reply or report back is not human authorization. Ask before sending when authorization is missing or unclear. Capability availability never substitutes for permission.
+
+### Using Agency roles from Codex
+
+In Codex, read the selected Agency role definitions and use the relevant instructions as briefs for native subagents. Keep the configured Codex model and permissions. Report this as Codex work using Agency briefs.
+
+Use Claude Code as an external runner only with the user's explicit authorization for that runner. Verify access to the launch tool and check Claude's readiness in the same environment without making a model call. Run workers that share Claude credentials one at a time. If any worker reports expired OAuth or another shared authentication failure, skip every pending launch through that runner for the task. State the failure and any authorized fallback before continuing. Use the same role briefs in native Codex when that fallback fits the request.
+
+Log the planned runner and selected roles with repeatable `--legs` entries. In the outcome note, name the runner and roles that produced results, plus any failed or skipped runner and the reason for falling back. A successful fallback can finish the task when it satisfies the user's request. If the requested runner was required for the deliverable, keep that requirement visible in the outcome. See the [CLI reference](cli.md#record-outcomes-and-corrections).

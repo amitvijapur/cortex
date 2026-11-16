@@ -177,7 +177,7 @@
 ### Agency Agents (`~/.claude/agents/`)
 **Installed:** Yes (280+ specialists across 20+ divisions)
 **Strengths:** Deep domain expertise per agent
-**Best for:** Pair with orchestrators via combo syntax. Run `/agents` to list.
+**Best for:** In Claude Code, pair with a callable orchestrator via combo syntax and run `/agents` to list roles. In Codex, use selected role definitions as briefs for native subagents. Follow the template's capability and authorization gates before starting an external Claude Code session.
 
 | Domain | Agent(s) |
 |--------|----------|
