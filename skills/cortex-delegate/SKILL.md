@@ -62,6 +62,10 @@ Connected-app permissions and approval requirements still apply inside Work. Del
 
 For current-task subtasks, prefer native agents exposed in the current session. If unavailable, perform bounded work in the parent or explain the limitation. Do not substitute `create_thread` without an explicit request for a new task.
 
+When Codex selects an Agency role for the current task, read its installed definition and pass the relevant role instructions as the brief for a native Codex subagent. Launch Claude Code externally only with explicit user authorization and after checking access to the launch tool and authentication readiness from the same environment without making a model call.
+
+Run workers that share Claude credentials one at a time. If any worker reports expired OAuth or another shared authentication failure, skip every pending launch through that runner for the task. State the reason and any authorized fallback before continuing. Record the intended runner and roles in `--legs` entries. In the outcome note, report the runner and roles that produced results and why any fallback was used.
+
 Check that `/ccg`, deep-dive, and any other proposed workflow are actually callable in the current session. Installed files are not proof of capability. Uncertainty never automatically authorizes a paid council or external model spend. Use available read-only evidence and parent review first. If a needed capability or authorization is missing, use an authorized available fallback, ask for the missing authority, or report the limitation. Do not install, spend, message, or create user-owned tasks to bypass a gate.
 
 ## Review packet

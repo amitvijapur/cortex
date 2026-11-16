@@ -102,4 +102,6 @@ python3 "$CORTEX_HOME/bin/cortex" show --last 3
 
 Match the task, route, tier and outcome to the actual session. If the CLI cannot identify the route for an outcome, have the agent inspect its route event and use that exact ID with `outcome --ref`; do not attach the result to an unrelated route. [CLI reference](cli.md#record-outcomes-and-corrections).
 
+To check delegated routing in Codex, ask for one Agency role and verify that a native subagent receives its brief and is named as the runner in the outcome. To exercise the external runner fallback without a provider call, use a mock Claude runner in a temporary environment. Give it three roles, have the first finish and the second report expired OAuth, then check that the third launch is skipped and that the outcome names any fallback that ran. [Routing guide](routing.md#using-agency-roles-from-codex).
+
 If no route appears, check the protocol read, CLI errors and state root before repeating a write. Keep your terminal output and follow the [feedback checklist](adoption-feedback.md) if you get stuck. A successful trial demonstrates your setup for this task; it does not prove general routing quality or savings.
