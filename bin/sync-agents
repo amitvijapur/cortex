@@ -36,6 +36,7 @@ before any changes are applied.
 """
 import argparse
 import json
+import os
 import re
 import stat
 import subprocess
@@ -99,6 +100,90 @@ def preflight_entry(path, directory):
                          f"{'directory' if directory else 'regular file'}")
 
 
+def committed_path(name):
+    """Convert a raw Git path only after proving every component is relative."""
+    try:
+        decoded = name.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("unsafe committed agent path: invalid UTF-8") from exc
+    parts = decoded.split("/")
+    if any(part in ("", ".", "..") for part in parts):
+        raise ValueError(f"unsafe committed agent path: {decoded!r}")
+    rel = Path(*parts)
+    if rel.anchor or rel.parts != tuple(parts):
+        raise ValueError(f"unsafe committed agent path: {decoded!r}")
+    return rel
+
+
+def destination_path(root, rel):
+    """Return a lexical target only when it is strictly beneath root."""
+    if (not rel.parts or rel.anchor
+            or any(part in ("", ".", "..") for part in rel.parts)):
+        raise ValueError(f"unsafe destination path: {rel}")
+    target = root.joinpath(*rel.parts)
+    try:
+        beneath = target.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"unsafe destination path: {rel}") from exc
+    if not beneath.parts:
+        raise ValueError(f"unsafe destination path: {rel}")
+    return target
+
+
+def directory_open_flags():
+    """Require the POSIX controls needed for descriptor-relative safe writes."""
+    if (not hasattr(os, "O_DIRECTORY") or not hasattr(os, "O_NOFOLLOW")
+            or os.open not in os.supports_dir_fd or os.mkdir not in os.supports_dir_fd):
+        raise OSError("safe descriptor-relative destination access is unavailable")
+    return (os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+            | getattr(os, "O_CLOEXEC", 0))
+
+
+def open_destination_root(root):
+    """Open the verified destination itself without following a final link."""
+    return os.open(root, directory_open_flags())
+
+
+def open_destination_parent(root_fd, rel):
+    """Open or create rel's parent beneath root_fd without following links."""
+    current_fd = os.dup(root_fd)
+    try:
+        for part in rel.parts[:-1]:
+            try:
+                os.mkdir(part, dir_fd=current_fd)
+            except FileExistsError:
+                pass
+            next_fd = os.open(part, directory_open_flags(), dir_fd=current_fd)
+            os.close(current_fd)
+            current_fd = next_fd
+        return current_fd
+    except BaseException:
+        os.close(current_fd)
+        raise
+
+
+def write_destination(root_fd, rel, content):
+    """Write a validated relative file through root_fd without following links."""
+    if (not rel.parts or rel.anchor
+            or any(part in ("", ".", "..") for part in rel.parts)):
+        raise ValueError(f"unsafe destination path: {rel}")
+    parent_fd = open_destination_parent(root_fd, rel)
+    try:
+        flags = (os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
+                 | getattr(os, "O_CLOEXEC", 0))
+        fd = os.open(rel.name, flags, 0o666, dir_fd=parent_fd)
+    finally:
+        os.close(parent_fd)
+    mode = "wb" if isinstance(content, bytes) else "w"
+    try:
+        stream = os.fdopen(fd, mode)
+    except BaseException:
+        os.close(fd)
+        raise
+    with stream:
+        stream.write(content)
+
+
 def committed_agents(src, commit):
     """Read exact committed bytes, ignoring staged, unstaged and untracked edits."""
     tree = subprocess.run(["git", "-C", str(src), "ls-tree", "-rz", commit],
@@ -108,7 +193,7 @@ def committed_agents(src, commit):
         if not entry:
             continue
         metadata, name = entry.split(b"\t", 1)
-        rel = Path(name.decode("utf-8"))
+        rel = committed_path(name)
         if (rel.suffix != ".md" or rel.parts[0] in SKIP_DIRS
                 or rel.name in DOC_NAMES):
             continue
@@ -177,7 +262,8 @@ def main():
         sys.exit(f"no HEAD commit in {src}")
     try:
         upstream = committed_agents(src, full)
-        targets = {dst / rel for rel in upstream} | {stamp_path, dst / BASES}
+        upstream_targets = {rel: destination_path(dst, rel) for rel in upstream}
+        targets = set(upstream_targets.values()) | {stamp_path, dst / BASES}
         # Refuse aliases conservatively even on case-sensitive hosts so a plan
         # remains safe on macOS case/normalisation-insensitive filesystems.
         def path_key(path):
@@ -221,7 +307,7 @@ def main():
 
     for rel in sorted(s_files):
         up = upstream_text[rel]
-        dp = dst / rel
+        dp = upstream_targets[rel]
         if not dp.exists():
             new.append(rel)
             continue
@@ -275,20 +361,24 @@ def main():
         print("dry run — nothing written. re-run with --apply")
         return 0
 
-    for rel in new + update:
-        (dst / rel).parent.mkdir(parents=True, exist_ok=True)
-        (dst / rel).write_bytes(upstream[rel])
-    for rel in merge:
-        (dst / rel).write_text(merged[rel])
+    destination_fd = open_destination_root(dst)
+    try:
+        for rel in new + update:
+            write_destination(destination_fd, rel, upstream[rel])
+        for rel in merge:
+            write_destination(destination_fd, rel, merged[rel])
 
-    unresolved = {rel.as_posix() for rel, _ in conflict}
-    # Retain absent upstream conflicts too, in case the file is reintroduced.
-    next_bases = {key: value for key, value in bases.items()
-                  if Path(key) not in s_files or key in unresolved}
-    for key in unresolved:
-        next_bases.setdefault(key, (git(src, "rev-parse", base) or base).strip())
-    bases_path.write_text(json.dumps(next_bases, indent=2, sort_keys=True) + "\n")
-    stamp_path.write_text(f"{full}\n")
+        unresolved = {rel.as_posix() for rel, _ in conflict}
+        # Retain absent upstream conflicts too, in case the file is reintroduced.
+        next_bases = {key: value for key, value in bases.items()
+                      if Path(key) not in s_files or key in unresolved}
+        for key in unresolved:
+            next_bases.setdefault(key, (git(src, "rev-parse", base) or base).strip())
+        write_destination(destination_fd, Path(BASES),
+                          json.dumps(next_bases, indent=2, sort_keys=True) + "\n")
+        write_destination(destination_fd, Path(STAMP), f"{full}\n")
+    finally:
+        os.close(destination_fd)
     print(f"applied: {len(new)} new, {len(update)} updated, {len(merge)} merged")
     print(f"stamped {STAMP} at {full[:9]}")
     if conflict:
