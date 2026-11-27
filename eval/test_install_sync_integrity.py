@@ -5,6 +5,7 @@ import hashlib
 import os
 from pathlib import Path
 import re
+import runpy
 import shutil
 import subprocess
 import sys
@@ -703,6 +704,17 @@ class SyncTests(IsolatedTest):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('unsafe destination', result.stderr)
         self.assertEqual(self.snapshot(self.dst), before)
+
+    def test_committed_paths_reject_escape_components(self):
+        committed_path = runpy.run_path(str(ROOT / 'bin/sync-agents'))['committed_path']
+        unsafe = (b'/absolute.md', b'team//agent.md', b'./agent.md',
+                  b'team/./agent.md', b'../agent.md', b'team/../agent.md')
+        for raw in unsafe:
+            with self.subTest(raw=raw):
+                with self.assertRaisesRegex(ValueError, 'unsafe committed agent path'):
+                    committed_path(raw)
+        self.assertEqual(committed_path(b'team/nested-agent.md'),
+                         Path('team/nested-agent.md'))
 
     def test_dirty_source_uses_only_pinned_committed_blobs(self):
         self.write('merge.md', 'custom description', 'original body', local=True)
